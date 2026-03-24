@@ -1,5 +1,5 @@
-// core/src/main/scala/de/nowchess/chess/model/Board.scala
-package de.nowchess.chess.model
+// core/src/main/scala/de/eljachess/chess/model/Board.scala
+package de.eljachess.chess.model
 
 case class Board(grid: Map[Square, Piece]):
 

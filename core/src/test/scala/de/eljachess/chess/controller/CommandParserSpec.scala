@@ -1,9 +1,9 @@
-// core/src/test/scala/de/nowchess/chess/controller/CommandParserSpec.scala
-package de.nowchess.chess.controller
+// core/src/test/scala/de/eljachess/chess/controller/CommandParserSpec.scala
+package de.eljachess.chess.controller
 
+import de.eljachess.chess.model.Square
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import de.nowchess.chess.model.Square
 
 class CommandParserSpec extends AnyFlatSpec with Matchers:
 

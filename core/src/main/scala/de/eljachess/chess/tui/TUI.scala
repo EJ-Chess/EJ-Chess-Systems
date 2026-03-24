@@ -1,6 +1,6 @@
-package de.nowchess.chess.tui
+package de.eljachess.chess.tui
 
-import de.nowchess.chess.controller.GameController
+import de.eljachess.chess.controller.GameController
 import scala.io.StdIn
 import scala.annotation.tailrec
 
@@ -10,7 +10,7 @@ class TUI(initialController: GameController):
 
   @tailrec
   private def loop(ctrl: GameController): Unit =
-    println(Renderer.render(ctrl.board))
+    println(Renderer.render(ctrl.board, ctrl.currentTurn))
     val line = StdIn.readLine()
     if line != null then
       if line.trim.nonEmpty then

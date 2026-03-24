@@ -1,5 +1,5 @@
-// core/src/test/scala/de/nowchess/chess/model/SquareSpec.scala
-package de.nowchess.chess.model
+// core/src/test/scala/de/eljachess/chess/model/SquareSpec.scala
+package de.eljachess.chess.model
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

@@ -1,7 +1,7 @@
-// core/src/main/scala/de/nowchess/chess/controller/CommandParser.scala
-package de.nowchess.chess.controller
+// core/src/main/scala/de/eljachess/chess/controller/CommandParser.scala
+package de.eljachess.chess.controller
 
-import de.nowchess.chess.model.Square
+import de.eljachess.chess.model.Square
 import scala.util.matching.Regex
 
 object CommandParser:
