@@ -18,6 +18,23 @@ case class Board(grid: Map[Square, Piece]):
 
   def pieceAt(square: Square): Option[Piece] = grid.get(square)
 
+  /** True if the king of `color` is currently under attack. */
+  def isInCheck(color: Color): Boolean =
+    val kingPos = grid.collectFirst { case (sq, Piece(c, PieceKind.King)) if c == color => sq }
+    kingPos.exists { ks =>
+      grid.exists { case (from, Piece(c, _)) if c != color => move(from, ks).isDefined
+                    case _                                  => false }
+    }
+
+  /** All moves for `color` that do not leave the own king in check. */
+  def legalMoves(color: Color): List[(Square, Square)] =
+    for
+      from     <- grid.keys.toList if grid(from).color == color
+      to       <- Square.all
+      newBoard <- move(from, to)
+      if !newBoard.isInCheck(color)
+    yield (from, to)
+
   // Returns true if every square strictly between from and to is empty.
   // Works for straight (rook-style) and diagonal (bishop-style) paths.
   private def isPathClear(from: Square, to: Square): Boolean =

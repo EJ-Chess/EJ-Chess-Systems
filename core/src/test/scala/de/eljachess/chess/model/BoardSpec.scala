@@ -337,3 +337,52 @@ class BoardSpec extends AnyFlatSpec with Matchers:
     )
     Board(g).move(Square(3, 3), Square(4, 4)) shouldBe None
   }
+
+  // ── isInCheck ────────────────────────────────────────────────────────────────
+
+  "Board.isInCheck" should "return true when the king is attacked" in {
+    // White king on e1, black rook on e5 – rook attacks along the e-file
+    val g = Map(
+      Square(4, 0) -> Piece(Color.White, PieceKind.King),
+      Square(4, 4) -> Piece(Color.Black, PieceKind.Rook)
+    )
+    Board(g).isInCheck(Color.White) shouldBe true
+  }
+
+  it should "return false on the initial board" in {
+    Board.initial.isInCheck(Color.White) shouldBe false
+    Board.initial.isInCheck(Color.Black) shouldBe false
+  }
+
+  // ── legalMoves ───────────────────────────────────────────────────────────────
+
+  "Board.legalMoves" should "be empty in a checkmate position" in {
+    // Black king a8, white queen b6, white rook c8 → checkmate
+    val g = Map(
+      Square(1, 5) -> Piece(Color.White, PieceKind.Queen),
+      Square(2, 7) -> Piece(Color.White, PieceKind.Rook),
+      Square(0, 7) -> Piece(Color.Black, PieceKind.King)
+    )
+    Board(g).legalMoves(Color.Black) shouldBe empty
+  }
+
+  it should "be empty in a stalemate position" in {
+    // Black king a8, white queen c7 – king not in check but all escape squares covered
+    val g = Map(
+      Square(2, 6) -> Piece(Color.White, PieceKind.Queen),
+      Square(0, 7) -> Piece(Color.Black, PieceKind.King)
+    )
+    Board(g).legalMoves(Color.Black) shouldBe empty
+  }
+
+  it should "not include moves that leave the own king in check" in {
+    // White king e1, white rook e4 (pinned by black rook e8) – rook may only move along the e-file
+    val g = Map(
+      Square(4, 0) -> Piece(Color.White, PieceKind.King),
+      Square(4, 3) -> Piece(Color.White, PieceKind.Rook),
+      Square(4, 7) -> Piece(Color.Black, PieceKind.Rook)
+    )
+    val rookMoves = Board(g).legalMoves(Color.White).filter(_._1 == Square(4, 3))
+    rookMoves should not be empty                              // pinned rook can still move along the e-file
+    rookMoves.foreach { case (_, to) => to.col shouldBe 4 }   // but only along e-file (col 4)
+  }
