@@ -54,3 +54,10 @@ class GameControllerSpec extends AnyFlatSpec with Matchers:
     msg shouldBe "Moved e7 to e5"
     afterBlack.currentTurn shouldBe Color.White
   }
+
+  it should "return 'Invalid move' when a pawn tries an illegal move" in {
+    val (next, msg) = initial.handleCommand("e2 e5")
+    msg shouldBe "Invalid move"
+    next.board shouldBe initial.board
+    next.currentTurn shouldBe Color.White
+  }
