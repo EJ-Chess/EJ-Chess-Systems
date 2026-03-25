@@ -17,7 +17,8 @@ class TUI(manager: GameManager, readLine: () => String | Null = () => scala.io.S
 
   @tailrec
   private def loop(): Unit =
-    println(Renderer.render(manager.state.board, manager.state.currentTurn))
+    val ctrl = manager.state
+    println(Renderer.render(ctrl.board, ctrl.currentTurn))
     val line = readLine()
     if line != null then
       val trimmed = line.trim

@@ -70,6 +70,16 @@ class TUISpec extends AnyFlatSpec with Matchers:
     manager.state shouldBe stateAfterMove
   }
 
+  it should "call manager.redo for uppercase 'REDO' input" in {
+    val manager = freshManager
+    manager.move("e2 e4")
+    val stateAfterMove = manager.state
+    manager.undo()
+    val tui = TUI(manager, makeReadLine("REDO"))
+    captureOutput { tui.start() }
+    manager.state shouldBe stateAfterMove
+  }
+
   it should "ignore empty lines without calling manager" in {
     val manager = freshManager
     val initial = manager.state

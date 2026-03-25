@@ -8,7 +8,9 @@ class GameManager(initial: GameController):
   private var future    = List.empty[GameController]
   private val observers = mutable.Buffer.empty[Observer]
 
-  def addObserver(o: Observer): Unit = synchronized { observers += o }
+  def addObserver(o: Observer): Unit = synchronized {
+    if !observers.contains(o) then observers += o
+  }
   def state: GameController           = synchronized { current }
 
   def move(input: String, caller: Observer | Null = null): String =

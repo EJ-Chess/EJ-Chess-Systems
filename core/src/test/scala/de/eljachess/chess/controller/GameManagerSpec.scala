@@ -106,6 +106,19 @@ class GameManagerSpec extends AnyFlatSpec with Matchers:
     obs2.updates should have size 1
   }
 
+  it should "skip caller on redo" in {
+    val manager = freshManager
+    manager.move("e2 e4")
+    manager.undo()
+    val obs1 = MockObserver()
+    val obs2 = MockObserver()
+    manager.addObserver(obs1)
+    manager.addObserver(obs2)
+    manager.redo(obs1)
+    obs1.updates shouldBe empty
+    obs2.updates should have size 1
+  }
+
   "GameManager.redo" should "restore the undone state" in {
     val manager = freshManager
     manager.move("e2 e4")
