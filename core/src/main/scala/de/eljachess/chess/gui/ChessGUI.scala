@@ -34,6 +34,7 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
   def onUpdate(ctrl: GameController, msg: String): Unit =
     Platform.runLater: () =>
       selected = None
+      currentCtrl = ctrl
       redrawBoard(ctrl)
       msgLabel.setText(msg)
 
@@ -68,7 +69,6 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
     msgLabel.setText(msg)
 
   private def redrawBoard(ctrl: GameController): Unit =
-    currentCtrl = ctrl
     grid.getChildren.clear()
     statusLabel.setText(if ctrl.currentTurn == ChessColor.White then "White's turn" else "Black's turn")
     for row <- 7 to 0 by -1 do
@@ -101,7 +101,10 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
         val move = s"${from.toAlgebraic} ${sq.toAlgebraic}"
         val msg  = manager.move(move, this)   // TUI is notified; GUI is not (caller = this)
         selected     = None
-        currentCtrl  = manager.state          // read updated state directly
+        // manager.state is read immediately after move() returns on the JavaFX thread;
+        // a concurrent TUI move between the two calls is possible but rare in practice.
+        // Proper fix: have GameManager.move return (GameController, String).
+        currentCtrl  = manager.state
         redrawBoard(currentCtrl)
         msgLabel.setText(msg)
 
