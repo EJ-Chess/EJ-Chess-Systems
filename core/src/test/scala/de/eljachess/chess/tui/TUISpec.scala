@@ -8,7 +8,7 @@ import java.io.{ByteArrayOutputStream, PrintStream}
 
 class TUISpec extends AnyFlatSpec with Matchers:
 
-  /** Captures stdout produced by f, then restores the original stream. */
+  /** Captures Scala Console output produced by f using Console.withOut (thread-local, no global mutation). */
   private def captureOutput(f: => Unit): String =
     val buf = ByteArrayOutputStream()
     val ps  = PrintStream(buf, true, "UTF-8")
