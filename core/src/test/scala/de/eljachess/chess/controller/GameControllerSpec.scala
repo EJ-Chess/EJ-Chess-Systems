@@ -120,3 +120,67 @@ class GameControllerSpec extends AnyFlatSpec with Matchers:
     val (_, msg) = ctrl.handleCommand("e4 d5")
     msg shouldBe "Moved e4 to d5 – captured Black Pawn"
   }
+
+  it should "include captured White Rook info in the message" in {
+    // black rook a8 captures white rook a1; white king on d4 not on same file/rank
+    val board = Board(Map(
+      Square(0, 7) -> Piece(Color.Black, PieceKind.Rook),
+      Square(0, 0) -> Piece(Color.White, PieceKind.Rook),
+      Square(3, 3) -> Piece(Color.White, PieceKind.King),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.King)
+    ))
+    val ctrl = GameController(board, Color.Black)
+    val (_, msg) = ctrl.handleCommand("a8 a1")
+    msg shouldBe "Moved a8 to a1 – captured White Rook"
+  }
+
+  it should "include captured Black Knight info in the message" in {
+    // white rook a1 captures black knight a4
+    val board = Board(Map(
+      Square(0, 0) -> Piece(Color.White, PieceKind.Rook),
+      Square(0, 3) -> Piece(Color.Black, PieceKind.Knight),
+      Square(7, 0) -> Piece(Color.White, PieceKind.King),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.King)
+    ))
+    val ctrl = GameController(board, Color.White)
+    val (_, msg) = ctrl.handleCommand("a1 a4")
+    msg shouldBe "Moved a1 to a4 – captured Black Knight"
+  }
+
+  it should "include captured Black Bishop info in the message" in {
+    // white rook a4 captures black bishop d4 (same rank, path clear)
+    val board = Board(Map(
+      Square(0, 3) -> Piece(Color.White, PieceKind.Rook),
+      Square(3, 3) -> Piece(Color.Black, PieceKind.Bishop),
+      Square(7, 0) -> Piece(Color.White, PieceKind.King),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.King)
+    ))
+    val ctrl = GameController(board, Color.White)
+    val (_, msg) = ctrl.handleCommand("a4 d4")
+    msg shouldBe "Moved a4 to d4 – captured Black Bishop"
+  }
+
+  it should "include captured Black Queen info in the message" in {
+    // white rook a1 captures black queen a7; white king on d4 keeps black king with legal moves
+    val board = Board(Map(
+      Square(0, 0) -> Piece(Color.White, PieceKind.Rook),
+      Square(0, 6) -> Piece(Color.Black, PieceKind.Queen),
+      Square(3, 3) -> Piece(Color.White, PieceKind.King),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.King)
+    ))
+    val ctrl = GameController(board, Color.White)
+    val (_, msg) = ctrl.handleCommand("a1 a7")
+    msg shouldBe "Moved a1 to a7 – captured Black Queen"
+  }
+
+  it should "include captured Black King info in the message" in {
+    // white rook h1 captures black king h8; black has no pieces left → stalemate appended
+    val board = Board(Map(
+      Square(7, 0) -> Piece(Color.White, PieceKind.Rook),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.King),
+      Square(0, 0) -> Piece(Color.White, PieceKind.King)
+    ))
+    val ctrl = GameController(board, Color.White)
+    val (_, msg) = ctrl.handleCommand("h1 h8")
+    msg should include("captured Black King")
+  }
