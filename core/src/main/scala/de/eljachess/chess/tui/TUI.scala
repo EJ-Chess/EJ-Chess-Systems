@@ -1,21 +1,30 @@
 package de.eljachess.chess.tui
 
-import de.eljachess.chess.controller.GameController
-import scala.io.StdIn
+import de.eljachess.chess.controller.{GameController, GameManager, Observer}
 import scala.annotation.tailrec
 
-class TUI(initialController: GameController):
+class TUI(manager: GameManager, readLine: () => String | Null = () => scala.io.StdIn.readLine())
+    extends Observer:
 
-  def start(): Unit = loop(initialController)
+  def start(): Unit =
+    manager.addObserver(this)
+    loop()
+
+  def onUpdate(ctrl: GameController, msg: String): Unit =
+    // Invoked only for moves originating from another observer (e.g. the GUI)
+    println(s"\n[GUI] $msg")
+    println(Renderer.render(ctrl.board, ctrl.currentTurn))
 
   @tailrec
-  private def loop(ctrl: GameController): Unit =
-    println(Renderer.render(ctrl.board, ctrl.currentTurn))
-    val line = StdIn.readLine()
+  private def loop(): Unit =
+    println(Renderer.render(manager.state.board, manager.state.currentTurn))
+    val line = readLine()
     if line != null then
-      if line.trim.nonEmpty then
-        val (nextCtrl, msg) = ctrl.handleCommand(line)
+      val trimmed = line.trim
+      if trimmed.nonEmpty then
+        val msg = trimmed.toLowerCase match
+          case "undo" => manager.undo(this)
+          case "redo" => manager.redo(this)
+          case _      => manager.move(trimmed, this)
         println(msg)
-        loop(nextCtrl)
-      else
-        loop(ctrl)
+      loop() // always recurse while input is non-null; empty lines skip the move
