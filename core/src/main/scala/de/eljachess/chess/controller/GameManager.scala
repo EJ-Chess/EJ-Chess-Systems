@@ -11,38 +11,44 @@ class GameManager(initial: GameController):
   def addObserver(o: Observer): Unit = synchronized { observers += o }
   def state: GameController           = synchronized { current }
 
-  def move(input: String, caller: Observer | Null = null): String = synchronized {
-    val (next, msg) = current.handleCommand(input)
-    if next != current then
-      history = current :: history
-      future  = Nil
-      current = next
-      notifyObservers(msg, skip = caller)
-    msg
-  }
-
-  def undo(caller: Observer | Null = null): String = synchronized {
-    history match
-      case Nil          => "Nothing to undo"
-      case prev :: rest =>
-        future  = current :: future
-        history = rest
-        current = prev
-        notifyObservers("Undo", skip = caller)
-        "Undo"
-  }
-
-  def redo(caller: Observer | Null = null): String = synchronized {
-    future match
-      case Nil          => "Nothing to redo"
-      case next :: rest =>
+  def move(input: String, caller: Observer | Null = null): String =
+    val (snapshot, ctrl, msg) = synchronized {
+      val (next, msg) = current.handleCommand(input)
+      if next != current then
         history = current :: history
-        future  = rest
+        future  = Nil
         current = next
-        notifyObservers("Redo", skip = caller)
-        "Redo"
-  }
+        (observers.toList.filterNot(_ eq caller), current, msg)
+      else
+        (Nil, current, msg)
+    }
+    snapshot.foreach(_.onUpdate(ctrl, msg))
+    msg
 
-  // Called only from within synchronized methods — do NOT call manager methods from observer.onUpdate
-  private def notifyObservers(msg: String, skip: Observer | Null): Unit =
-    observers.foreach(o => if o ne skip then o.onUpdate(current, msg))
+  def undo(caller: Observer | Null = null): String =
+    val result = synchronized {
+      history match
+        case Nil          => (Nil, current, "Nothing to undo")
+        case prev :: rest =>
+          future  = current :: future
+          history = rest
+          current = prev
+          (observers.toList.filterNot(_ eq caller), current, "Undo")
+    }
+    val (snapshot, ctrl, msg) = result
+    if snapshot.nonEmpty then snapshot.foreach(_.onUpdate(ctrl, msg))
+    msg
+
+  def redo(caller: Observer | Null = null): String =
+    val result = synchronized {
+      future match
+        case Nil          => (Nil, current, "Nothing to redo")
+        case next :: rest =>
+          history = current :: history
+          future  = rest
+          current = next
+          (observers.toList.filterNot(_ eq caller), current, "Redo")
+    }
+    val (snapshot, ctrl, msg) = result
+    if snapshot.nonEmpty then snapshot.foreach(_.onUpdate(ctrl, msg))
+    msg
