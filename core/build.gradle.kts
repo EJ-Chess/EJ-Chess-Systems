@@ -20,6 +20,7 @@ scala {
 
 scoverage {
     scoverageVersion.set(versions["SCOVERAGE"]!!)
+    excludedFiles.addAll(".*ChessGUI.*", ".*ChessApp.*")
 }
 
 application {

@@ -18,3 +18,22 @@ out of scope for unit tests.
 **Suggested Next Step:**
 Accept as a known gap. Class-level coverage remains above the 95% threshold.
 No action required unless a headless integration test suite is added.
+
+## [2026-03-25] ChessGUI + ChessApp excluded from scoverage
+
+**Requirement / Bug:**
+ChessGUI and ChessApp cannot be covered by automated tests because the JavaFX
+lifecycle (Application.start, Stage, Platform.runLater) requires a running
+display server and JavaFX Application Thread that are not available in headless
+CI/test environments.
+
+**Root Cause (if known):**
+JavaFX requires a native window system. Headless testing with TestFX was deemed
+out of scope for this feature.
+
+**Attempted Fixes:**
+1. Scoverage exclusion configured in core/build.gradle.kts via excludedFiles.
+
+**Suggested Next Step:**
+Add TestFX as a test dependency and write a headless smoke test that launches
+the application with a mock GameManager to verify board rendering and button callbacks.
