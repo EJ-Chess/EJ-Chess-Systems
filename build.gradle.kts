@@ -9,6 +9,7 @@ val versions = mapOf(
     "SCALATEST_JUNIT"       to "0.1.11",
     "SCOVERAGE"             to "2.1.1",
     "SCALAFX"               to "21.0.0-R32",
-    "JAVAFX"                to "21"
+    "JAVAFX"                to "21",
+    "JUNIT_BOM"             to "5.13.4"
 )
 extra["VERSIONS"] = versions
