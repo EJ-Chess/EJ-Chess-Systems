@@ -1,9 +1,13 @@
 // core/src/main/scala/de/eljachess/chess/model/Board.scala
 package de.eljachess.chess.model
 
-case class Board(grid: Map[Square, Piece]):
+case class Board(
+  grid:            Map[Square, Piece],
+  castlingRights:  CastlingRights = CastlingRights(),
+  enPassantTarget: Option[Square] = None
+):
 
-  def move(from: Square, to: Square): Option[Board] =
+  def move(from: Square, to: Square, promotion: Option[PieceKind] = None): Option[Board] =
     grid.get(from).flatMap { piece =>
       val valid = piece.kind match
         case PieceKind.Pawn   => isValidPawnMove(from, to, piece.color)
@@ -12,7 +16,7 @@ case class Board(grid: Map[Square, Piece]):
         case PieceKind.Knight => isValidKnightMove(from, to, piece.color)
         case PieceKind.Queen  => isValidQueenMove(from, to, piece.color)
         case PieceKind.King   => isValidKingMove(from, to, piece.color)
-      if valid then Some(Board(grid - from + (to -> piece)))
+      if valid then Some(Board(grid - from + (to -> piece), castlingRights, None))
       else None
     }
 

@@ -386,3 +386,13 @@ class BoardSpec extends AnyFlatSpec with Matchers:
     rookMoves should not be empty                              // pinned rook can still move along the e-file
     rookMoves.foreach { case (_, to) => to.col shouldBe 4 }   // but only along e-file (col 4)
   }
+
+  // ── Board fields ─────────────────────────────────────────────────────────
+
+  "Board.initial" should "have all castling rights enabled" in {
+    Board.initial.castlingRights shouldBe CastlingRights()
+  }
+
+  it should "have no en passant target" in {
+    Board.initial.enPassantTarget shouldBe None
+  }
