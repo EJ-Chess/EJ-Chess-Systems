@@ -599,6 +599,16 @@ class BoardSpec extends AnyFlatSpec with Matchers:
     result.get.pieceAt(Square(5, 7)) shouldBe Some(Piece(Color.White, PieceKind.Queen))
   }
 
+  it should "return None when promotion piece is King" in {
+    val b = Board(Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn)))
+    b.move(Square(4, 6), Square(4, 7), Some(PieceKind.King)) shouldBe None
+  }
+
+  it should "return None when promotion piece is Pawn" in {
+    val b = Board(Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn)))
+    b.move(Square(4, 6), Square(4, 7), Some(PieceKind.Pawn)) shouldBe None
+  }
+
   "Board.legalMoves" should "include promotion destination squares for pawns near back rank" in {
     val b = Board(Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn)))
     val dests = b.legalMoves(Color.White).map(_._2)
