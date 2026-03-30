@@ -7,7 +7,6 @@ import javafx.geometry.{Insets, Pos}
 import javafx.scene.Scene
 import javafx.scene.control.{Button, Label}
 import javafx.scene.layout.{BorderPane, GridPane, HBox, StackPane}
-import javafx.scene.paint.Color
 import javafx.scene.shape.Rectangle
 import javafx.scene.text.{Font, Text}
 import javafx.stage.Stage
@@ -71,16 +70,20 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
   private def redrawBoard(ctrl: GameController): Unit =
     grid.getChildren.clear()
     statusLabel.setText(if ctrl.currentTurn == ChessColor.White then "White's turn" else "Black's turn")
+    val legalDests: Set[Square] =
+      selected.map { from =>
+        ctrl.board.legalMoves(ctrl.currentTurn)
+          .filter(_._1 == from)
+          .map(_._2)
+          .toSet
+      }.getOrElse(Set.empty)
     for row <- 7 to 0 by -1 do
       for col <- 0 to 7 do
-        val sq = Square(col, row)
-        val isLight    = (col + row) % 2 == 1
-        val isSelected = selected.contains(sq)
-        val bg = if isSelected then Color.web("#F6F669")
-                 else if isLight then Color.web("#F0D9B5")
-                 else Color.web("#B58863")
-        val rect  = Rectangle(squareSize.toDouble, squareSize.toDouble, bg)
-        val label = Text(ctrl.board.pieceAt(sq).map(pieceSymbol).getOrElse(""))
+        val sq      = Square(col, row)
+        val isLight = (col + row) % 2 == 1
+        val bg      = HighlightColors.squareColor(sq, selected, legalDests, ctrl.board, isLight)
+        val rect    = Rectangle(squareSize.toDouble, squareSize.toDouble, bg)
+        val label   = Text(ctrl.board.pieceAt(sq).map(pieceSymbol).getOrElse(""))
         label.setFont(Font.font(36))
         val cell = StackPane(rect, label)
         cell.setOnMouseClicked(_ => handleClick(sq))
