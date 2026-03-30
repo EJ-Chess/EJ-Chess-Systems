@@ -5,7 +5,7 @@ import de.eljachess.chess.model.{Color as ChessColor, Piece, PieceKind, Square}
 import javafx.application.Platform
 import javafx.geometry.{Insets, Pos}
 import javafx.scene.Scene
-import javafx.scene.control.{Button, Label}
+import javafx.scene.control.{Button, ChoiceDialog, Label}
 import javafx.scene.layout.{BorderPane, GridPane, HBox, StackPane}
 import javafx.scene.shape.Rectangle
 import javafx.scene.text.{Font, Text}
@@ -101,15 +101,29 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
         selected = None
         redrawBoard(currentCtrl)
       case Some(from) =>
-        val move = s"${from.toAlgebraic} ${sq.toAlgebraic}"
-        val msg  = manager.move(move, this)   // TUI is notified; GUI is not (caller = this)
-        selected     = None
-        // manager.state is read immediately after move() returns on the JavaFX thread;
-        // a concurrent TUI move between the two calls is possible but rare in practice.
-        // Proper fix: have GameManager.move return (GameController, String).
-        currentCtrl  = manager.state
-        redrawBoard(currentCtrl)
-        msgLabel.setText(msg)
+        val isPromotion =
+          currentCtrl.board.pieceAt(from).exists(_.kind == PieceKind.Pawn) &&
+          ((currentCtrl.currentTurn == ChessColor.White && sq.row == 7) ||
+           (currentCtrl.currentTurn == ChessColor.Black && sq.row == 0))
+        if isPromotion then
+          val dialog = new ChoiceDialog[String]("Q", java.util.List.of("Q", "R", "B", "N"))
+          dialog.setTitle("Bauernumwandlung")
+          dialog.setHeaderText("Wähle die Umwandlungsfigur")
+          dialog.setContentText("Figur (Q=Dame R=Turm B=Läufer N=Springer):")
+          val result = dialog.showAndWait()
+          if result.isPresent then
+            val letter = result.get()
+            val msg = manager.move(s"${from.toAlgebraic} ${sq.toAlgebraic} $letter", this)
+            selected = None; currentCtrl = manager.state; redrawBoard(currentCtrl); msgLabel.setText(msg)
+          else
+            selected = None; redrawBoard(currentCtrl)
+        else
+          val move = s"${from.toAlgebraic} ${sq.toAlgebraic}"
+          val msg  = manager.move(move, this)
+          selected    = None
+          currentCtrl = manager.state
+          redrawBoard(currentCtrl)
+          msgLabel.setText(msg)
 
   private def pieceSymbol(piece: Piece): String = piece match
     case Piece(ChessColor.White, PieceKind.King)   => "♔"
