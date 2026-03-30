@@ -20,6 +20,8 @@ Add FEN (Forsyth–Edwards Notation) export and import to the chess engine, TUI,
 
 ## Scope
 
+**Note:** This project uses `core/` as the single module name, predating the `modules/` convention in CLAUDE.md. All paths below are intentionally under `core/`.
+
 **New files:**
 - `core/src/main/scala/de/eljachess/chess/model/Fen.scala`
 - `core/src/test/scala/de/eljachess/chess/model/FenSpec.scala`
@@ -29,7 +31,7 @@ Add FEN (Forsyth–Edwards Notation) export and import to the chess engine, TUI,
 - `core/src/main/scala/de/eljachess/chess/controller/CommandParser.scala` — two new patterns
 - `core/src/main/scala/de/eljachess/chess/controller/GameController.scala` — two new match arms
 - `core/src/main/scala/de/eljachess/chess/gui/ChessGUI.scala` — two toolbar buttons (scoverage-excluded)
-- `core/src/test/scala/de/eljachess/chess/controller/CommandParserSpec.scala` — 2 new cases
+- `core/src/test/scala/de/eljachess/chess/controller/CommandParserSpec.scala` — 3 new cases
 - `core/src/test/scala/de/eljachess/chess/controller/GameControllerSpec.scala` — 2 new cases
 
 ## Data Model
@@ -67,6 +69,8 @@ object Fen:
   def encode(ctrl: GameController): String
 ```
 
+Assumes all fields of `GameController` satisfy their invariants (non-negative clocks, valid board). No defensive handling for invalid inputs.
+
 Encodes each field:
 
 1. **Piece placement** — iterates rows 7→0 (rank 8→1), cols 0→7 (file a→h). White pieces are uppercase (`KQRBNP`), Black pieces lowercase (`kqrbnp`). Consecutive empty squares are replaced by their count (1–8). Ranks are joined with `"/"`.
@@ -87,14 +91,17 @@ Encodes each field:
   def decode(fen: String): Either[String, GameController]
 ```
 
-Splits the input on whitespace. Returns `Left("Invalid FEN: <reason>")` if:
-- Field count is not exactly 6.
-- Piece placement: any character is not in `KQRBNPkqrbnp1-8/`; any rank (split by `/`) does not sum to 8 (digits count as their value, piece letters as 1); rank count is not 8.
-- Active color: not `"w"` or `"b"`.
-- Castling: not a subset of `KQkq` characters (or `"-"`).
-- En passant: not `"-"` and not a valid algebraic square (`a-h` followed by `1-8`).
-- Halfmove clock: not a non-negative integer.
-- Fullmove number: not a positive integer.
+Splits the input on whitespace into tokens. Returns `Left("Invalid FEN: <reason>")` if any check fails:
+
+- **Field count:** tokens.length != 6 → `"Invalid FEN: expected 6 fields, got <n>"`
+- **Piece placement:** any character not in `KQRBNPkqrbnp1-8/` → `"Invalid FEN: invalid piece char '<c>'"`. Rank count (split by `/`) != 8 → `"Invalid FEN: expected 8 ranks, got <n>"`. Any rank's square sum != 8 → `"Invalid FEN: rank <n> has wrong length"`.
+- **Active color:** not `"w"` or `"b"` → `"Invalid FEN: invalid active color '<s>'"`.
+- **Castling:** contains a character outside `KQkq-` → `"Invalid FEN: invalid castling '<s>'"`.
+- **En passant:** not `"-"` and not matching `[a-h][1-8]` → `"Invalid FEN: invalid en passant square '<s>'"`.
+- **Halfmove clock:** not parseable as non-negative integer → `"Invalid FEN: invalid halfmove clock '<s>'"`.
+- **Fullmove number:** not parseable as positive integer → `"Invalid FEN: invalid fullmove number '<s>'"`.
+
+The `load` command passes the raw FEN string (everything after `"load "`) directly to `Fen.decode`. Since a FEN string itself contains spaces, `CommandParser` extracts the FEN by stripping the `"load "` prefix from the trimmed input — **not** by splitting on whitespace.
 
 On success, reconstructs:
 - `Board(grid, castlingRights, enPassantTarget)`
@@ -112,7 +119,18 @@ enum ParsedMove:
 
 ### `CommandParser` patterns
 
-Matched before existing move logic:
+Added at the **top** of `parse`, before the castling checks and `tokens match` block:
+
+```scala
+def parse(input: String): Either[String, ParsedMove] =
+  val trimmed = input.trim
+  if trimmed == "fen" then return Right(ParsedMove.FenQuery)
+  if trimmed.startsWith("load ") then
+    val fen = trimmed.stripPrefix("load ").trim
+    return Right(ParsedMove.FenLoad(fen))
+  if trimmed == "load" then return Left("Usage: load <fen>")
+  // ... existing castling and move parsing below
+```
 
 | Input | Result |
 |-------|--------|
@@ -122,19 +140,37 @@ Matched before existing move logic:
 
 ### `GameController.handleCommand` additions
 
-```scala
-case ParsedMove.FenQuery =>
-  (this, Fen.encode(this))
+The FEN cases are added **before** the coordinate-extraction logic, as direct top-level match arms on `Right(parsed)`:
 
-case ParsedMove.FenLoad(s) =>
-  Fen.decode(s) match
-    case Right(newCtrl) => (newCtrl, "Position loaded")
-    case Left(err)      => (this, err)
+```scala
+def handleCommand(input: String): (GameController, String) =
+  CommandParser.parse(input) match
+    case Left(err)                     => (this, err)
+    case Right(ParsedMove.FenQuery)    => (this, Fen.encode(this))
+    case Right(ParsedMove.FenLoad(s))  =>
+      Fen.decode(s) match
+        case Right(newCtrl) => (newCtrl, "Position loaded")
+        case Left(err)      => (this, err)
+    case Right(parsed) =>
+      val (from, to, promo) = parsed match
+        case ParsedMove.Move(f, t, p)      => (f, t, p)
+        case ParsedMove.Castling(kingside) =>
+          val row   = if currentTurn == Color.White then 0 else 7
+          val toCol = if kingside then 6 else 2
+          (Square(4, row), Square(toCol, row), None)
+      // ... rest of existing move logic
 ```
 
 ### GUI changes
 
-Two new buttons added to the toolbar in `ChessGUI` (after Redo):
+Two new buttons added to the existing toolbar `HBox` after the Redo button, with consistent spacing:
+
+**Required additional imports:**
+```scala
+import javafx.scene.control.{Button, ChoiceDialog, Label, TextInputDialog}
+import javafx.scene.input.{Clipboard, ClipboardContent}
+import scala.jdk.OptionConverters.*
+```
 
 **"Copy FEN"**
 ```scala
@@ -165,30 +201,59 @@ loadFenBtn.setOnAction { _ =>
 }
 ```
 
-Note: `dialog.showAndWait().toScala` requires `import scala.jdk.OptionConverters.*`.
+Both buttons are appended to the existing `HBox` toolbar alongside Undo and Redo.
 
 ## Testing
 
-### `FenSpec` — test groups
+### `FenSpec` — test groups (ScalaTest `AnyFlatSpec with Matchers`)
 
 | Group | Key cases |
 |-------|-----------|
 | Encode — piece placement | Initial position produces `"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"`; empty rank encodes as `"8"`; single White King on e1 encodes correctly |
-| Encode — state fields | White to move → `"w"`; Black to move → `"b"`; all rights → `"KQkq"`; partial rights → `"Kq"`; no rights → `"-"`; en passant set → algebraic square; en passant absent → `"-"`; halfmove and fullmove numbers |
-| Decode — round-trip | `Fen.decode(Fen.encode(ctrl))` returns `Right(ctrl)` for initial position and a mid-game position |
-| Decode — known string | Initial FEN → `Right(GameController(Board.initial))` |
-| Decode — errors | Wrong field count; invalid piece char; rank sum ≠ 8; bad active color; bad castling char; bad en passant square; negative halfmove clock |
+| Encode — state fields | White to move → `"w"`; Black to move → `"b"`; all rights → `"KQkq"`; partial rights (only `whiteKingside` + `blackQueenside`) → `"Kq"`; no rights → `"-"`; en passant set → algebraic square; en passant absent → `"-"`; halfmoveClock = 7 encoded as `"7"`; fullmoveNumber = 3 encoded as `"3"` |
+| Decode — round-trip | `Fen.decode(Fen.encode(ctrl))` returns `Right(ctrl)` for initial position; round-trip preserves `halfmoveClock` and `fullmoveNumber` for a mid-game `GameController` |
+| Decode — known string | `"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"` → `Right(GameController(Board.initial))` |
+| Decode — errors | Wrong field count (5 or 7); invalid piece char (`X`); rank sum ≠ 8; rank count ≠ 8; bad active color (`"x"`); bad castling char (`"Z"`); bad en passant (`"e9"`); non-integer halfmove clock (`"x"`); non-integer fullmove number (`"0"`) |
+
+Example test structure:
+```scala
+"Fen.encode" should "produce the initial FEN piece placement" in { ... }
+it should "encode White to move as 'w'" in { ... }
+"Fen.decode" should "round-trip the initial position" in { ... }
+it should "return Left for wrong field count" in { ... }
+```
 
 ### `CommandParserSpec` additions
 
-- `"fen"` → `Right(ParsedMove.FenQuery)`
-- `"load rnbq..."` → `Right(ParsedMove.FenLoad("rnbq..."))`
-- `"load"` (no argument) → `Left("Usage: load <fen>")`
+```scala
+it should "parse fen command" in {
+  CommandParser.parse("fen") shouldBe Right(ParsedMove.FenQuery)
+}
+it should "parse load command with FEN string" in {
+  CommandParser.parse("load rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") shouldBe
+    Right(ParsedMove.FenLoad("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"))
+}
+it should "return Left for load without argument" in {
+  CommandParser.parse("load") shouldBe Left("Usage: load <fen>")
+}
+```
 
 ### `GameControllerSpec` additions
 
-- `handleCommand("fen")` on initial board returns `Right` containing the initial FEN string
-- `handleCommand("load <initial-fen>")` on a modified board returns `"Position loaded"` and resets to initial position
+```scala
+it should "return current FEN string for fen command" in {
+  val (_, msg) = GameController(Board.initial).handleCommand("fen")
+  msg shouldBe "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+}
+it should "reset to initial position on load command" in {
+  val (afterMove, _) = GameController(Board.initial).handleCommand("e2 e4")
+  val (reset, msg) = afterMove.handleCommand(
+    "load rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+  )
+  reset.board shouldBe Board.initial
+  msg shouldBe "Position loaded"
+}
+```
 
 ## Known Limitations
 
