@@ -1,9 +1,14 @@
 // core/src/main/scala/de/eljachess/chess/controller/GameController.scala
 package de.eljachess.chess.controller
 
-import de.eljachess.chess.model.{Board, Color, PieceKind}
+import de.eljachess.chess.model.{Board, Color, PieceKind, Square}
 
-case class GameController(board: Board, currentTurn: Color = Color.White):
+case class GameController(
+  board:          Board,
+  currentTurn:    Color = Color.White,
+  halfmoveClock:  Int   = 0,
+  fullmoveNumber: Int   = 1
+):
 
   private def colorName(c: Color): String = if c == Color.White then "White" else "Black"
   private def kindName(k: PieceKind): String = k match
@@ -14,31 +19,39 @@ case class GameController(board: Board, currentTurn: Color = Color.White):
     case PieceKind.Queen  => "Queen"
     case PieceKind.King   => "King"
 
-
   def handleCommand(input: String): (GameController, String) =
     CommandParser.parse(input) match
       case Left(err) => (this, err)
-      case Right((from, to)) =>
+      case Right(parsed) =>
+        val (from, to, promo) = parsed match
+          case ParsedMove.Move(f, t, p) => (f, t, p)
+          case ParsedMove.Castling(kingside) =>
+            val row   = if currentTurn == Color.White then 0 else 7
+            val toCol = if kingside then 6 else 2
+            (Square(4, row), Square(toCol, row), None)
         board.pieceAt(from) match
           case None =>
             (this, s"No piece at ${from.toAlgebraic}")
           case Some(piece) if piece.color != currentTurn =>
-            val whose = if currentTurn == Color.White then "White" else "Black"
-            (this, s"It's ${whose}'s turn")
+            (this, s"It's ${colorName(currentTurn)}'s turn")
           case Some(_) =>
             val captured = board.pieceAt(to)
-            board.move(from, to) match
-              case None                                    => (this, "Invalid move")
-              case Some(newBoard) if newBoard.isInCheck(currentTurn) => (this, "Invalid move")
+            board.move(from, to, promo) match
+              case None                                                    => (this, "Invalid move")
+              case Some(newBoard) if newBoard.isInCheck(currentTurn)      => (this, "Invalid move")
               case Some(newBoard) =>
-                val nextTurn   = if currentTurn == Color.White then Color.Black else Color.White
-                val moveMsg    = s"Moved ${from.toAlgebraic} to ${to.toAlgebraic}"
-                val captureStr = captured.map(p => s" – captured ${colorName(p.color)} ${kindName(p.kind)}").getOrElse("")
-                val statusStr  =
+                val nextTurn    = if currentTurn == Color.White then Color.Black else Color.White
+                val isPawnMove  = board.pieceAt(from).exists(_.kind == PieceKind.Pawn)
+                val isCapture   = captured.isDefined
+                val newHalfmove = if isPawnMove || isCapture then 0 else halfmoveClock + 1
+                val newFullmove = if currentTurn == Color.Black then fullmoveNumber + 1 else fullmoveNumber
+                val moveMsg     = s"Moved ${from.toAlgebraic} to ${to.toAlgebraic}"
+                val captureStr  = captured.map(p => s" – captured ${colorName(p.color)} ${kindName(p.kind)}").getOrElse("")
+                val statusStr   =
                   val inCheck  = newBoard.isInCheck(nextTurn)
                   val hasMoves = newBoard.legalMoves(nextTurn).nonEmpty
                   if inCheck && !hasMoves then " – Checkmate!"
                   else if !inCheck && !hasMoves then " – Stalemate!"
                   else if inCheck then " – Check!"
                   else ""
-                (GameController(newBoard, nextTurn), moveMsg + captureStr + statusStr)
+                (GameController(newBoard, nextTurn, newHalfmove, newFullmove), moveMsg + captureStr + statusStr)

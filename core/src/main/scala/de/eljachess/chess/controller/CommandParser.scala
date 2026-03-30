@@ -1,18 +1,34 @@
 // core/src/main/scala/de/eljachess/chess/controller/CommandParser.scala
 package de.eljachess.chess.controller
 
-import de.eljachess.chess.model.Square
+import de.eljachess.chess.model.{PieceKind, Square}
 import scala.util.matching.Regex
 
 object CommandParser:
   private val squareRegex: Regex = "^[a-h][1-8]$".r
 
-  def parse(input: String): Either[String, (Square, Square)] =
-    val tokens = input.trim.split("\\s+").toList.filter(_.nonEmpty)
-    if tokens.length == 2 && tokens.forall(squareRegex.matches) then
-      Right((toSquare(tokens(0)), toSquare(tokens(1))))
-    else
-      Left("Invalid command format. Use: <from> <to> (e.g. e2 e4)")
+  def parse(input: String): Either[String, ParsedMove] =
+    val trimmed = input.trim
+    if trimmed == "O-O-O" then return Right(ParsedMove.Castling(kingside = false))
+    if trimmed == "O-O"   then return Right(ParsedMove.Castling(kingside = true))
+
+    val tokens = trimmed.split("\\s+").toList.filter(_.nonEmpty)
+    tokens match
+      case List(f, t) if squareRegex.matches(f) && squareRegex.matches(t) =>
+        Right(ParsedMove.Move(toSquare(f), toSquare(t), None))
+      case List(f, t, p) if squareRegex.matches(f) && squareRegex.matches(t) =>
+        parsePromotion(p) match
+          case Some(kind) => Right(ParsedMove.Move(toSquare(f), toSquare(t), Some(kind)))
+          case None       => Left("Invalid command format. Use: <from> <to> (e.g. e2 e4)")
+      case _ =>
+        Left("Invalid command format. Use: <from> <to> (e.g. e2 e4)")
 
   private def toSquare(token: String): Square =
     Square(token(0) - 'a', token(1) - '1')
+
+  private def parsePromotion(token: String): Option[PieceKind] = token match
+    case "Q" => Some(PieceKind.Queen)
+    case "R" => Some(PieceKind.Rook)
+    case "B" => Some(PieceKind.Bishop)
+    case "N" => Some(PieceKind.Knight)
+    case _   => None
