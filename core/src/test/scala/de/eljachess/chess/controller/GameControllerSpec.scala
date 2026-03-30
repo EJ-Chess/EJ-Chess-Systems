@@ -206,3 +206,68 @@ class GameControllerSpec extends AnyFlatSpec with Matchers:
     next.board shouldBe ctrl.board
     msg shouldBe "Invalid move"
   }
+
+  // ── Clocks ────────────────────────────────────────────────────────────────
+
+  "GameController halfmoveClock" should "increment on a normal non-pawn move" in {
+    val ctrl = GameController(Board(Map(
+      Square(1, 0) -> Piece(Color.White, PieceKind.Knight),
+      Square(4, 0) -> Piece(Color.White, PieceKind.King),
+      Square(4, 7) -> Piece(Color.Black, PieceKind.King)
+    )), halfmoveClock = 3)
+    val (next, _) = ctrl.handleCommand("b1 c3")
+    next.halfmoveClock shouldBe 4
+  }
+
+  it should "reset to 0 on a pawn move" in {
+    val ctrl = GameController(Board.initial, halfmoveClock = 10)
+    val (next, _) = ctrl.handleCommand("e2 e4")
+    next.halfmoveClock shouldBe 0
+  }
+
+  it should "reset to 0 on a capture" in {
+    val ctrl = GameController(Board(Map(
+      Square(4, 4) -> Piece(Color.White, PieceKind.Rook),
+      Square(4, 6) -> Piece(Color.Black, PieceKind.Pawn),
+      Square(0, 0) -> Piece(Color.White, PieceKind.King),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.King)
+    )), halfmoveClock = 5)
+    val (next, _) = ctrl.handleCommand("e5 e7")
+    next.halfmoveClock shouldBe 0
+  }
+
+  "GameController fullmoveNumber" should "not increment after White moves" in {
+    val ctrl = GameController(Board.initial, fullmoveNumber = 1)
+    val (next, _) = ctrl.handleCommand("e2 e4")
+    next.fullmoveNumber shouldBe 1
+  }
+
+  it should "increment after Black moves" in {
+    val (afterWhite, _) = GameController(Board.initial).handleCommand("e2 e4")
+    val (afterBlack, _) = afterWhite.handleCommand("e7 e5")
+    afterBlack.fullmoveNumber shouldBe 2
+  }
+
+  "GameController castling" should "resolve O-O to correct squares for White" in {
+    val b = Board(Map(
+      Square(4, 0) -> Piece(Color.White, PieceKind.King),
+      Square(7, 0) -> Piece(Color.White, PieceKind.Rook),
+      Square(4, 7) -> Piece(Color.Black, PieceKind.King)
+    ))
+    val ctrl = GameController(b)
+    val (next, _) = ctrl.handleCommand("O-O")
+    next.board.pieceAt(Square(6, 0)) shouldBe Some(Piece(Color.White, PieceKind.King))
+    next.board.pieceAt(Square(5, 0)) shouldBe Some(Piece(Color.White, PieceKind.Rook))
+  }
+
+  it should "resolve O-O to correct squares for Black" in {
+    val (afterWhite, _) = GameController(Board(Map(
+      Square(4, 0) -> Piece(Color.White, PieceKind.King),
+      Square(4, 7) -> Piece(Color.Black, PieceKind.King),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.Rook),
+      Square(0, 1) -> Piece(Color.White, PieceKind.Pawn)
+    ))).handleCommand("a2 a3")
+    val (afterBlack, _) = afterWhite.handleCommand("O-O")
+    afterBlack.board.pieceAt(Square(6, 7)) shouldBe Some(Piece(Color.Black, PieceKind.King))
+    afterBlack.board.pieceAt(Square(5, 7)) shouldBe Some(Piece(Color.Black, PieceKind.Rook))
+  }
