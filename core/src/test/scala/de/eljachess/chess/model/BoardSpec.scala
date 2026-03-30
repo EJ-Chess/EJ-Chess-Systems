@@ -500,3 +500,51 @@ class BoardSpec extends AnyFlatSpec with Matchers:
     ))
     b.move(Square(4, 0), Square(6, 0)) shouldBe None
   }
+
+  // ── En Passant ────────────────────────────────────────────────────────────
+
+  "Board.move for en passant" should "set enPassantTarget after a 2-square pawn advance" in {
+    val result = Board.initial.move(Square(4, 1), Square(4, 3))  // e2-e4
+    result shouldBe defined
+    result.get.enPassantTarget shouldBe Some(Square(4, 2))       // e3
+  }
+
+  it should "clear enPassantTarget after any other move" in {
+    val b = Board.initial.move(Square(4, 1), Square(4, 3)).get   // e2-e4, ep=e3
+    val b2 = b.move(Square(0, 6), Square(0, 5)).get              // a7-a6, ep cleared
+    b2.enPassantTarget shouldBe None
+  }
+
+  it should "allow white pawn to capture en passant" in {
+    val b = Board(Map(
+      Square(4, 4) -> Piece(Color.White, PieceKind.Pawn),
+      Square(3, 4) -> Piece(Color.Black, PieceKind.Pawn)
+    ), enPassantTarget = Some(Square(3, 5)))
+    val result = b.move(Square(4, 4), Square(3, 5))  // exd6 en passant
+    result shouldBe defined
+    result.get.pieceAt(Square(3, 5)) shouldBe Some(Piece(Color.White, PieceKind.Pawn))
+    result.get.pieceAt(Square(3, 4)) shouldBe None   // captured pawn removed
+    result.get.pieceAt(Square(4, 4)) shouldBe None
+  }
+
+  it should "allow black pawn to capture en passant" in {
+    val b = Board(Map(
+      Square(3, 3) -> Piece(Color.Black, PieceKind.Pawn),
+      Square(4, 3) -> Piece(Color.White, PieceKind.Pawn)
+    ), enPassantTarget = Some(Square(4, 2)))
+    val result = b.move(Square(3, 3), Square(4, 2))  // dxe3 en passant
+    result shouldBe defined
+    result.get.pieceAt(Square(4, 2)) shouldBe Some(Piece(Color.Black, PieceKind.Pawn))
+    result.get.pieceAt(Square(4, 3)) shouldBe None   // captured pawn removed
+  }
+
+  it should "not allow en passant capture after the window has passed" in {
+    val b = Board(Map(
+      Square(4, 4) -> Piece(Color.White, PieceKind.Pawn),
+      Square(3, 4) -> Piece(Color.Black, PieceKind.Pawn),
+      Square(0, 7) -> Piece(Color.Black, PieceKind.Rook)
+    ), enPassantTarget = Some(Square(3, 5)))
+    val b2 = b.move(Square(0, 7), Square(0, 6)).get  // Black plays a different move
+    b2.enPassantTarget shouldBe None
+    b2.move(Square(4, 4), Square(3, 5)) shouldBe None
+  }

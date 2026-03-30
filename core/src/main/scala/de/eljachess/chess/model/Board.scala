@@ -9,9 +9,15 @@ case class Board(
 
   def move(from: Square, to: Square, promotion: Option[PieceKind] = None): Option[Board] =
     grid.get(from).flatMap { piece =>
-      // Castling: king moves exactly 2 squares horizontally
+      // Step 1: Castling
       if piece.kind == PieceKind.King && math.abs(to.col - from.col) == 2 then
         castlingMove(from, to, piece.color)
+      // Step 2: En passant capture (diagonal pawn move onto empty enPassantTarget)
+      else if piece.kind == PieceKind.Pawn &&
+              enPassantTarget.contains(to) &&
+              math.abs(to.col - from.col) == 1 &&
+              pieceAt(to).isEmpty then
+        enPassantCapture(from, to, piece.color)
       else
         val valid = piece.kind match
           case PieceKind.Pawn   => isValidPawnMove(from, to, piece.color)
@@ -21,8 +27,12 @@ case class Board(
           case PieceKind.Queen  => isValidQueenMove(from, to, piece.color)
           case PieceKind.King   => isValidKingMove(from, to, piece.color)
         if valid then
-          val newGrid = grid - from + (to -> piece)
-          Some(Board(newGrid, updatedCastlingRights(from, to, piece), None))
+          val newGrid      = grid - from + (to -> piece)
+          val newEpTarget  =
+            if piece.kind == PieceKind.Pawn && math.abs(to.row - from.row) == 2
+            then Some(Square(from.col, (from.row + to.row) / 2))
+            else None
+          Some(Board(newGrid, updatedCastlingRights(from, to, piece), newEpTarget))
         else None
     }
 
@@ -119,6 +129,11 @@ case class Board(
       (to                          -> Piece(color, PieceKind.King)) +
       (Square(rookToCol, from.row) -> Piece(color, PieceKind.Rook))
     Some(Board(newGrid, newRights, None))
+
+  private def enPassantCapture(from: Square, to: Square, color: Color): Option[Board] =
+    val capturedPawnSq = Square(to.col, from.row)
+    val newGrid = grid - from - capturedPawnSq + (to -> Piece(color, PieceKind.Pawn))
+    Some(Board(newGrid, castlingRights, None))
 
   // Returns true if every square strictly between from and to is empty.
   // Works for straight (rook-style) and diagonal (bishop-style) paths.
