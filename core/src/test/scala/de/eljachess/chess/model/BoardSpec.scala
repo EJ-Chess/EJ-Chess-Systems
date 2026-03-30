@@ -396,3 +396,107 @@ class BoardSpec extends AnyFlatSpec with Matchers:
   it should "have no en passant target" in {
     Board.initial.enPassantTarget shouldBe None
   }
+
+  // ── Castling ─────────────────────────────────────────────────────────────
+
+  private def castlingBoard(color: Color, kingside: Boolean): Board =
+    val row      = if color == Color.White then 0 else 7
+    val rookCol  = if kingside then 7 else 0
+    Board(Map(
+      Square(4, row) -> Piece(color, PieceKind.King),
+      Square(rookCol, row) -> Piece(color, PieceKind.Rook)
+    ))
+
+  "Board.move for castling" should "allow white kingside castling" in {
+    val b = castlingBoard(Color.White, kingside = true)
+    val result = b.move(Square(4, 0), Square(6, 0))
+    result shouldBe defined
+    result.get.pieceAt(Square(6, 0)) shouldBe Some(Piece(Color.White, PieceKind.King))
+    result.get.pieceAt(Square(5, 0)) shouldBe Some(Piece(Color.White, PieceKind.Rook))
+    result.get.pieceAt(Square(4, 0)) shouldBe None
+    result.get.pieceAt(Square(7, 0)) shouldBe None
+  }
+
+  it should "allow white queenside castling" in {
+    val b = castlingBoard(Color.White, kingside = false)
+    val result = b.move(Square(4, 0), Square(2, 0))
+    result shouldBe defined
+    result.get.pieceAt(Square(2, 0)) shouldBe Some(Piece(Color.White, PieceKind.King))
+    result.get.pieceAt(Square(3, 0)) shouldBe Some(Piece(Color.White, PieceKind.Rook))
+  }
+
+  it should "allow black kingside castling" in {
+    val b = castlingBoard(Color.Black, kingside = true)
+    val result = b.move(Square(4, 7), Square(6, 7))
+    result shouldBe defined
+    result.get.pieceAt(Square(6, 7)) shouldBe Some(Piece(Color.Black, PieceKind.King))
+    result.get.pieceAt(Square(5, 7)) shouldBe Some(Piece(Color.Black, PieceKind.Rook))
+  }
+
+  it should "allow black queenside castling" in {
+    val b = castlingBoard(Color.Black, kingside = false)
+    val result = b.move(Square(4, 7), Square(2, 7))
+    result shouldBe defined
+  }
+
+  it should "revoke kingside right after king moves" in {
+    val b = castlingBoard(Color.White, kingside = true)
+    val b2 = b.move(Square(4, 0), Square(5, 0)).get  // king moves one step
+    b2.castlingRights.whiteKingside  shouldBe false
+    b2.castlingRights.whiteQueenside shouldBe false
+  }
+
+  it should "revoke queenside right after a-rook moves" in {
+    val b = Board(Map(
+      Square(4, 0) -> Piece(Color.White, PieceKind.King),
+      Square(0, 0) -> Piece(Color.White, PieceKind.Rook),
+      Square(7, 0) -> Piece(Color.White, PieceKind.Rook)
+    ))
+    val b2 = b.move(Square(0, 0), Square(0, 1)).get
+    b2.castlingRights.whiteQueenside shouldBe false
+    b2.castlingRights.whiteKingside  shouldBe true
+  }
+
+  it should "revoke castling right when rook is captured on home square" in {
+    val b = Board(Map(
+      Square(4, 7) -> Piece(Color.Black, PieceKind.King),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.Rook),
+      Square(6, 5) -> Piece(Color.White, PieceKind.Knight)
+    ))
+    val b2 = b.move(Square(6, 5), Square(7, 7)).get
+    b2.castlingRights.blackKingside  shouldBe false
+    b2.castlingRights.blackQueenside shouldBe true
+  }
+
+  it should "not allow castling when right is revoked" in {
+    val b = castlingBoard(Color.White, kingside = true)
+      .copy(castlingRights = CastlingRights(whiteKingside = false))
+    b.move(Square(4, 0), Square(6, 0)) shouldBe None
+  }
+
+  it should "not allow castling when path is blocked" in {
+    val b = Board(Map(
+      Square(4, 0) -> Piece(Color.White, PieceKind.King),
+      Square(7, 0) -> Piece(Color.White, PieceKind.Rook),
+      Square(5, 0) -> Piece(Color.White, PieceKind.Bishop)
+    ))
+    b.move(Square(4, 0), Square(6, 0)) shouldBe None
+  }
+
+  it should "not allow castling when king is in check" in {
+    val b = Board(Map(
+      Square(4, 0) -> Piece(Color.White, PieceKind.King),
+      Square(7, 0) -> Piece(Color.White, PieceKind.Rook),
+      Square(4, 7) -> Piece(Color.Black, PieceKind.Rook)
+    ))
+    b.move(Square(4, 0), Square(6, 0)) shouldBe None
+  }
+
+  it should "not allow castling through an attacked square" in {
+    val b = Board(Map(
+      Square(4, 0) -> Piece(Color.White, PieceKind.King),
+      Square(7, 0) -> Piece(Color.White, PieceKind.Rook),
+      Square(5, 7) -> Piece(Color.Black, PieceKind.Rook)
+    ))
+    b.move(Square(4, 0), Square(6, 0)) shouldBe None
+  }

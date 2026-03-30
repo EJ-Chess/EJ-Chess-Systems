@@ -9,25 +9,41 @@ case class Board(
 
   def move(from: Square, to: Square, promotion: Option[PieceKind] = None): Option[Board] =
     grid.get(from).flatMap { piece =>
-      val valid = piece.kind match
-        case PieceKind.Pawn   => isValidPawnMove(from, to, piece.color)
-        case PieceKind.Rook   => isValidRookMove(from, to, piece.color)
-        case PieceKind.Bishop => isValidBishopMove(from, to, piece.color)
-        case PieceKind.Knight => isValidKnightMove(from, to, piece.color)
-        case PieceKind.Queen  => isValidQueenMove(from, to, piece.color)
-        case PieceKind.King   => isValidKingMove(from, to, piece.color)
-      if valid then Some(Board(grid - from + (to -> piece), castlingRights, None))
-      else None
+      // Castling: king moves exactly 2 squares horizontally
+      if piece.kind == PieceKind.King && math.abs(to.col - from.col) == 2 then
+        castlingMove(from, to, piece.color)
+      else
+        val valid = piece.kind match
+          case PieceKind.Pawn   => isValidPawnMove(from, to, piece.color)
+          case PieceKind.Rook   => isValidRookMove(from, to, piece.color)
+          case PieceKind.Bishop => isValidBishopMove(from, to, piece.color)
+          case PieceKind.Knight => isValidKnightMove(from, to, piece.color)
+          case PieceKind.Queen  => isValidQueenMove(from, to, piece.color)
+          case PieceKind.King   => isValidKingMove(from, to, piece.color)
+        if valid then
+          val newGrid = grid - from + (to -> piece)
+          Some(Board(newGrid, updatedCastlingRights(from, to, piece), None))
+        else None
     }
 
   def pieceAt(square: Square): Option[Piece] = grid.get(square)
 
-  /** True if the king of `color` is currently under attack. */
+  /** True if the king of `color` is currently under attack.
+   *  Uses piece validators directly to avoid recursion through castlingMove. */
   def isInCheck(color: Color): Boolean =
     val kingPos = grid.collectFirst { case (sq, Piece(c, PieceKind.King)) if c == color => sq }
     kingPos.exists { ks =>
-      grid.exists { case (from, Piece(c, _)) if c != color => move(from, ks).isDefined
-                    case _                                  => false }
+      grid.exists {
+        case (from, Piece(c, kind)) if c != color =>
+          kind match
+            case PieceKind.Pawn   => isValidPawnMove(from, ks, c)
+            case PieceKind.Rook   => isValidRookMove(from, ks, c)
+            case PieceKind.Bishop => isValidBishopMove(from, ks, c)
+            case PieceKind.Knight => isValidKnightMove(from, ks, c)
+            case PieceKind.Queen  => isValidQueenMove(from, ks, c)
+            case PieceKind.King   => isValidKingMove(from, ks, c)
+        case _ => false
+      }
     }
 
   /** All moves for `color` that do not leave the own king in check. */
@@ -38,6 +54,71 @@ case class Board(
       newBoard <- move(from, to)
       if !newBoard.isInCheck(color)
     yield (from, to)
+
+  private def updatedCastlingRights(from: Square, to: Square, piece: Piece): CastlingRights =
+    var r = castlingRights
+    // King moves: clear both rights for that colour
+    if piece.kind == PieceKind.King then
+      r = piece.color match
+        case Color.White => r.copy(whiteKingside = false, whiteQueenside = false)
+        case Color.Black => r.copy(blackKingside = false, blackQueenside = false)
+    // Rook moves from home square
+    if piece.kind == PieceKind.Rook then
+      if      from == Square(0, 0) then r = r.copy(whiteQueenside = false)
+      else if from == Square(7, 0) then r = r.copy(whiteKingside  = false)
+      else if from == Square(0, 7) then r = r.copy(blackQueenside = false)
+      else if from == Square(7, 7) then r = r.copy(blackKingside  = false)
+    // Rook captured on home square
+    if      to == Square(0, 0) then r = r.copy(whiteQueenside = false)
+    else if to == Square(7, 0) then r = r.copy(whiteKingside  = false)
+    else if to == Square(0, 7) then r = r.copy(blackQueenside = false)
+    else if to == Square(7, 7) then r = r.copy(blackKingside  = false)
+    r
+
+  private def castlingMove(from: Square, to: Square, color: Color): Option[Board] =
+    val kingside = to.col > from.col
+    val hasRight = (color, kingside) match
+      case (Color.White, true)  => castlingRights.whiteKingside
+      case (Color.White, false) => castlingRights.whiteQueenside
+      case (Color.Black, true)  => castlingRights.blackKingside
+      case (Color.Black, false) => castlingRights.blackQueenside
+    if !hasRight then return None
+
+    val rookFromCol = if kingside then 7 else 0
+    val rookFrom    = Square(rookFromCol, from.row)
+    if pieceAt(rookFrom).isEmpty then return None  // rook must be present
+
+    val between =
+      if kingside then List(Square(5, from.row), Square(6, from.row))
+      else             List(Square(1, from.row), Square(2, from.row), Square(3, from.row))
+    if between.exists(sq => pieceAt(sq).isDefined) then return None
+
+    if isInCheck(color) then return None
+
+    // Check transit square (king must not pass through attacked square)
+    val transitCol   = if kingside then 5 else 3
+    val transitBoard = Board(
+      grid - from + (Square(transitCol, from.row) -> Piece(color, PieceKind.King)),
+      castlingRights, enPassantTarget
+    )
+    if transitBoard.isInCheck(color) then return None
+
+    // Check that king's destination is not attacked
+    val destBoard = Board(
+      grid - from + (to -> Piece(color, PieceKind.King)),
+      castlingRights, enPassantTarget
+    )
+    if destBoard.isInCheck(color) then return None
+
+    val rookToCol = if kingside then 5 else 3
+    val newRights = color match
+      case Color.White => castlingRights.copy(whiteKingside = false, whiteQueenside = false)
+      case Color.Black => castlingRights.copy(blackKingside = false, blackQueenside = false)
+    val newGrid =
+      grid - from - rookFrom +
+      (to                          -> Piece(color, PieceKind.King)) +
+      (Square(rookToCol, from.row) -> Piece(color, PieceKind.Rook))
+    Some(Board(newGrid, newRights, None))
 
   // Returns true if every square strictly between from and to is empty.
   // Works for straight (rook-style) and diagonal (bishop-style) paths.
