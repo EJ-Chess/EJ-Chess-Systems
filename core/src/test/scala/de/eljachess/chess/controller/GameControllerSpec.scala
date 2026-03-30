@@ -184,3 +184,25 @@ class GameControllerSpec extends AnyFlatSpec with Matchers:
     val (_, msg) = ctrl.handleCommand("h1 h8")
     msg should include("captured Black King")
   }
+
+  it should "promote a pawn via handleCommand e7 e8 Q" in {
+    val ctrl = GameController(Board(Map(
+      Square(4, 6) -> Piece(Color.White, PieceKind.Pawn),
+      Square(4, 0) -> Piece(Color.White, PieceKind.King),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.King)
+    )))
+    val (next, msg) = ctrl.handleCommand("e7 e8 Q")
+    next.board.pieceAt(Square(4, 7)) shouldBe Some(Piece(Color.White, PieceKind.Queen))
+    msg should include ("Moved")
+  }
+
+  it should "reject promotion without piece token" in {
+    val ctrl = GameController(Board(Map(
+      Square(4, 6) -> Piece(Color.White, PieceKind.Pawn),
+      Square(4, 0) -> Piece(Color.White, PieceKind.King),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.King)
+    )))
+    val (next, msg) = ctrl.handleCommand("e7 e8")
+    next.board shouldBe ctrl.board
+    msg shouldBe "Invalid move"
+  }

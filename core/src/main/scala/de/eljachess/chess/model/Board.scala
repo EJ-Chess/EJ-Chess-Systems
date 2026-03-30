@@ -18,6 +18,12 @@ case class Board(
               math.abs(to.col - from.col) == 1 &&
               pieceAt(to).isEmpty then
         enPassantCapture(from, to, piece.color)
+      // Step 3: Promotion (pawn reaches back rank)
+      else if piece.kind == PieceKind.Pawn &&
+              ((piece.color == Color.White && to.row == 7) ||
+               (piece.color == Color.Black && to.row == 0)) then
+        promotionMove(from, to, piece.color, promotion)
+      // Step 4: Normal move
       else
         val valid = piece.kind match
           case PieceKind.Pawn   => isValidPawnMove(from, to, piece.color)
@@ -27,8 +33,8 @@ case class Board(
           case PieceKind.Queen  => isValidQueenMove(from, to, piece.color)
           case PieceKind.King   => isValidKingMove(from, to, piece.color)
         if valid then
-          val newGrid      = grid - from + (to -> piece)
-          val newEpTarget  =
+          val newGrid     = grid - from + (to -> piece)
+          val newEpTarget =
             if piece.kind == PieceKind.Pawn && math.abs(to.row - from.row) == 2
             then Some(Square(from.col, (from.row + to.row) / 2))
             else None
@@ -59,9 +65,11 @@ case class Board(
   /** All moves for `color` that do not leave the own king in check. */
   def legalMoves(color: Color): List[(Square, Square)] =
     for
-      from     <- grid.keys.toList if grid(from).color == color
-      to       <- Square.all
-      newBoard <- move(from, to)
+      from <- grid.keys.toList if grid(from).color == color
+      to   <- Square.all
+      isBackRankPawn = grid(from).kind == PieceKind.Pawn &&
+        ((color == Color.White && to.row == 7) || (color == Color.Black && to.row == 0))
+      newBoard <- if isBackRankPawn then move(from, to, Some(PieceKind.Queen)) else move(from, to)
       if !newBoard.isInCheck(color)
     yield (from, to)
 
@@ -134,6 +142,17 @@ case class Board(
     val capturedPawnSq = Square(to.col, from.row)
     val newGrid = grid - from - capturedPawnSq + (to -> Piece(color, PieceKind.Pawn))
     Some(Board(newGrid, castlingRights, None))
+
+  private def promotionMove(from: Square, to: Square, color: Color, promotion: Option[PieceKind]): Option[Board] =
+    promotion match
+      case None                                         => None
+      case Some(PieceKind.King) | Some(PieceKind.Pawn) => None
+      case Some(kind) =>
+        val valid = isValidPawnMove(from, to, color)
+        if valid then
+          val newGrid = grid - from + (to -> Piece(color, kind))
+          Some(Board(newGrid, updatedCastlingRights(from, to, Piece(color, PieceKind.Pawn)), None))
+        else None
 
   // Returns true if every square strictly between from and to is empty.
   // Works for straight (rook-style) and diagonal (bishop-style) paths.

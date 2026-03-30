@@ -548,3 +548,59 @@ class BoardSpec extends AnyFlatSpec with Matchers:
     b2.enPassantTarget shouldBe None
     b2.move(Square(4, 4), Square(3, 5)) shouldBe None
   }
+
+  // ── Promotion ─────────────────────────────────────────────────────────────
+
+  "Board.move for promotion" should "promote white pawn to Queen" in {
+    val b = Board(Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn)))
+    val result = b.move(Square(4, 6), Square(4, 7), Some(PieceKind.Queen))
+    result shouldBe defined
+    result.get.pieceAt(Square(4, 7)) shouldBe Some(Piece(Color.White, PieceKind.Queen))
+    result.get.pieceAt(Square(4, 6)) shouldBe None
+  }
+
+  it should "promote white pawn to Rook" in {
+    val b = Board(Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn)))
+    b.move(Square(4, 6), Square(4, 7), Some(PieceKind.Rook)).flatMap(_.pieceAt(Square(4, 7))) shouldBe
+      Some(Piece(Color.White, PieceKind.Rook))
+  }
+
+  it should "promote white pawn to Bishop" in {
+    val b = Board(Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn)))
+    b.move(Square(4, 6), Square(4, 7), Some(PieceKind.Bishop)).flatMap(_.pieceAt(Square(4, 7))) shouldBe
+      Some(Piece(Color.White, PieceKind.Bishop))
+  }
+
+  it should "promote white pawn to Knight" in {
+    val b = Board(Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn)))
+    b.move(Square(4, 6), Square(4, 7), Some(PieceKind.Knight)).flatMap(_.pieceAt(Square(4, 7))) shouldBe
+      Some(Piece(Color.White, PieceKind.Knight))
+  }
+
+  it should "promote black pawn to Queen" in {
+    val b = Board(Map(Square(4, 1) -> Piece(Color.Black, PieceKind.Pawn)))
+    val result = b.move(Square(4, 1), Square(4, 0), Some(PieceKind.Queen))
+    result shouldBe defined
+    result.get.pieceAt(Square(4, 0)) shouldBe Some(Piece(Color.Black, PieceKind.Queen))
+  }
+
+  it should "return None when pawn reaches back rank without promotion piece" in {
+    val b = Board(Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn)))
+    b.move(Square(4, 6), Square(4, 7)) shouldBe None
+  }
+
+  it should "allow promotion via diagonal capture" in {
+    val b = Board(Map(
+      Square(4, 6) -> Piece(Color.White, PieceKind.Pawn),
+      Square(5, 7) -> Piece(Color.Black, PieceKind.Rook)
+    ))
+    val result = b.move(Square(4, 6), Square(5, 7), Some(PieceKind.Queen))
+    result shouldBe defined
+    result.get.pieceAt(Square(5, 7)) shouldBe Some(Piece(Color.White, PieceKind.Queen))
+  }
+
+  "Board.legalMoves" should "include promotion destination squares for pawns near back rank" in {
+    val b = Board(Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn)))
+    val dests = b.legalMoves(Color.White).map(_._2)
+    dests should contain (Square(4, 7))
+  }
