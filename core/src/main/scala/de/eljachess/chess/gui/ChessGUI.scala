@@ -53,17 +53,34 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
     undoBtn.setOnAction(_ => doAction(manager.undo(this)))
     redoBtn.setOnAction(_ => doAction(manager.redo(this)))
 
-    val copyFenBtn = Button("Copy FEN")
-    copyFenBtn.setOnAction { _ =>
+    val copyFenBtn   = buildCopyFenButton()
+    val loadFenBtn   = buildLoadFenButton()
+    val exportPgnBtn = buildExportPgnButton()
+
+    msgLabel.setPadding(Insets(0, 8, 0, 8))
+    val toolbar = HBox(8.0, undoBtn, redoBtn, copyFenBtn, loadFenBtn, exportPgnBtn, msgLabel)
+    toolbar.setPadding(Insets(8))
+    toolbar.setAlignment(Pos.CENTER_LEFT)
+    root.setBottom(toolbar)
+
+    stage.setTitle("ElJa Chess")
+    stage.setScene(Scene(root, (squareSize * 8).toDouble, (squareSize * 8 + 80).toDouble))
+    stage.setResizable(false)
+
+  private def buildCopyFenButton(): Button =
+    val btn = Button("Copy FEN")
+    btn.setOnAction { _ =>
       val fenStr  = manager.move("fen", this)
       val content = new ClipboardContent()
       content.putString(fenStr)
       Clipboard.getSystemClipboard.setContent(content)
       msgLabel.setText("FEN copied")
     }
+    btn
 
-    val loadFenBtn = Button("Load FEN")
-    loadFenBtn.setOnAction { _ =>
+  private def buildLoadFenButton(): Button =
+    val btn = Button("Load FEN")
+    btn.setOnAction { _ =>
       val dialog = new TextInputDialog()
       dialog.setTitle("FEN laden")
       dialog.setHeaderText("FEN-String eingeben")
@@ -74,9 +91,11 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
           selected = None; currentCtrl = manager.state; redrawBoard(currentCtrl); msgLabel.setText(msg)
         case _ => ()
     }
+    btn
 
-    val exportPgnBtn = Button("Export PGN")
-    exportPgnBtn.setOnAction { _ =>
+  private def buildExportPgnButton(): Button =
+    val btn = Button("Export PGN")
+    btn.setOnAction { _ =>
       val dialog = new TextInputDialog()
       dialog.setTitle("Spieler eingeben")
       dialog.setHeaderText("Spielernamen für PGN")
@@ -94,16 +113,7 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
             msgLabel.setText("Format: White, Black")
         case _ => ()
     }
-
-    msgLabel.setPadding(Insets(0, 8, 0, 8))
-    val toolbar = HBox(8.0, undoBtn, redoBtn, copyFenBtn, loadFenBtn, exportPgnBtn, msgLabel)
-    toolbar.setPadding(Insets(8))
-    toolbar.setAlignment(Pos.CENTER_LEFT)
-    root.setBottom(toolbar)
-
-    stage.setTitle("ElJa Chess")
-    stage.setScene(Scene(root, (squareSize * 8).toDouble, (squareSize * 8 + 80).toDouble))
-    stage.setResizable(false)
+    btn
 
   // Called after GUI-originated undo/redo (caller = this, so onUpdate was skipped).
   private def doAction(msg: String): Unit =
