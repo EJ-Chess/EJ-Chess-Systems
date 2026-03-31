@@ -30,13 +30,16 @@ class PgnSpec extends AnyFlatSpec with Matchers:
 
   it should "reject duplicate tags" in {
     val pgnText = "[White \"Alice\"]\n[White \"Bob\"]\n\ne4"
-    Pgn.decode(pgnText).isLeft shouldBe true
-    Pgn.decode(pgnText).left.toOption.getOrElse("") should include("Duplicate")
+    Pgn.decode(pgnText) match
+      case Left(msg) => msg should include("Duplicate")
+      case Right(_)  => fail("Expected Left for duplicate tags")
   }
 
   it should "return Left on malformed header" in {
     val pgnText = "[White \"Alice\"\ne4"
-    Pgn.decode(pgnText).isLeft shouldBe true
+    Pgn.decode(pgnText) match
+      case Left(msg) => msg should not be empty
+      case Right(_)  => fail("Expected Left for malformed header")
   }
 
   it should "parse move list ignoring move numbers and result" in {
@@ -58,5 +61,24 @@ class PgnSpec extends AnyFlatSpec with Matchers:
       case Right((headers, moves)) =>
         headers.isEmpty shouldBe true
         moves.isEmpty shouldBe true
+      case Left(err) => fail(s"Expected Right, got: $err")
+  }
+
+  it should "parse headers and moves with CRLF line endings" in {
+    val pgnText = "[White \"Alice\"]\r\n[Black \"Bob\"]\r\n\r\ne4 e5"
+    Pgn.decode(pgnText) match
+      case Right((headers, moves)) =>
+        headers.get("White") shouldBe Some("Alice")
+        moves shouldBe List("e4", "e5")
+      case Left(err) => fail(s"Expected Right, got: $err")
+  }
+
+  it should "handle empty lines between headers" in {
+    val pgnText = "[White \"Alice\"]\n\n[Black \"Bob\"]\n\ne4 e5"
+    Pgn.decode(pgnText) match
+      case Right((headers, moves)) =>
+        headers.get("White") shouldBe Some("Alice")
+        headers.get("Black") shouldBe Some("Bob")
+        moves shouldBe List("e4", "e5")
       case Left(err) => fail(s"Expected Right, got: $err")
   }

@@ -16,21 +16,21 @@ object Pgn:
 
   private def parseHeaders(lines: List[String]): Either[String, Map[String, String]] =
     val tagRegex = """^\[(\w+)\s+"(.*)"\]$""".r
-    val seen = scala.collection.mutable.Set.empty[String]
-    val result = scala.collection.mutable.Map.empty[String, String]
-    for line <- lines do
-      line.trim match
-        case tagRegex(tag, value) =>
-          if seen.contains(tag) then return Left(s"Duplicate PGN tag: $tag")
-          seen += tag
-          result(tag) = value
-        case other =>
-          return Left(s"Invalid PGN header: $other")
-    Right(result.toMap)
+    lines.foldLeft[Either[String, Map[String, String]]](Right(Map.empty)) {
+      case (Left(err), _) => Left(err)
+      case (Right(acc), line) =>
+        line.trim match
+          case tagRegex(tag, value) =>
+            if acc.contains(tag) then Left(s"Duplicate PGN tag: $tag")
+            else Right(acc + (tag -> value))
+          case other =>
+            Left(s"Invalid PGN header: $other")
+    }
 
   private def parseMoves(text: String): List[String] =
-    val noComments = text.replaceAll("""\{[^}]*\}""", "")
+    val noComments    = text.replaceAll("""\{[^}]*\}""", "")
     val noAnnotations = noComments.replaceAll("[!?]+", "")
-    noAnnotations.split("\\s+").toList
-      .filter(_.nonEmpty)
-      .filterNot(t => t.matches("\\d+\\.+") || t.matches("""(\*|1-0|0-1|1/2-1/2)"""))
+    val tokens        = noAnnotations.split("\\s+").toList.filter(_.nonEmpty)
+    val moveNumbers   = """^\d+\.+$""".r
+    val results       = Set("*", "1-0", "0-1", "1/2-1/2")
+    tokens.filterNot(t => moveNumbers.matches(t) || results.contains(t))
