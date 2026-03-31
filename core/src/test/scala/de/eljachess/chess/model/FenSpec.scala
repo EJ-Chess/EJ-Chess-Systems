@@ -101,50 +101,55 @@ class FenSpec extends AnyFlatSpec with Matchers:
 
   it should "return Left for wrong field count (5 fields)" in {
     Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0") shouldBe
-      a[Left[?, ?]]
+      Left("Invalid FEN: expected 6 fields, got 5")
   }
 
   it should "return Left for wrong field count (7 fields)" in {
     Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 extra") shouldBe
-      a[Left[?, ?]]
+      Left("Invalid FEN: expected 6 fields, got 7")
   }
 
   it should "return Left for an invalid piece character" in {
     Fen.decode("Xnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") shouldBe
-      a[Left[?, ?]]
+      Left("Invalid FEN: invalid piece char 'X'")
   }
 
   it should "return Left when a rank sum is not 8" in {
     Fen.decode("rnbqkbn/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") shouldBe
-      a[Left[?, ?]]
+      Left("Invalid FEN: rank 1 has wrong length")
   }
 
   it should "return Left for wrong rank count" in {
     Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP w KQkq - 0 1") shouldBe
-      a[Left[?, ?]]
+      Left("Invalid FEN: expected 8 ranks, got 7")
   }
 
   it should "return Left for invalid active color" in {
     Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR x KQkq - 0 1") shouldBe
-      a[Left[?, ?]]
+      Left("Invalid FEN: invalid active color 'x'")
   }
 
   it should "return Left for invalid castling string" in {
     Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w ZQkq - 0 1") shouldBe
-      a[Left[?, ?]]
+      Left("Invalid FEN: invalid castling 'ZQkq'")
   }
 
   it should "return Left for invalid en passant square" in {
     Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq e9 0 1") shouldBe
-      a[Left[?, ?]]
+      Left("Invalid FEN: invalid en passant square 'e9'")
   }
 
   it should "return Left for non-integer halfmove clock" in {
     Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - x 1") shouldBe
-      a[Left[?, ?]]
+      Left("Invalid FEN: invalid halfmove clock 'x'")
   }
 
   it should "return Left for zero fullmove number" in {
     Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0") shouldBe
-      a[Left[?, ?]]
+      Left("Invalid FEN: invalid fullmove number '0'")
+  }
+
+  it should "accept halfmove clock of 0" in {
+    Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") shouldBe
+      Right(GameController(Board.initial))
   }
