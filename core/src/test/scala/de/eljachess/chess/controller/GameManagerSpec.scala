@@ -161,3 +161,13 @@ class GameManagerSpec extends AnyFlatSpec with Matchers:
     manager.historyHead should be(defined)
     manager.historyHead.get._2 shouldBe ParsedMove.Move(Square(4, 1), Square(4, 3), None)
   }
+
+  "GameManager.pgn" should "return PGN string with player names after moves" in {
+    val manager = GameManager(GameController(Board.initial))
+    manager.move("e2 e4")
+    manager.move("e7 e5")
+    val pgn = manager.pgn("Alice", "Bob")
+    pgn should include("[White \"Alice\"]")
+    pgn should include("[Black \"Bob\"]")
+    pgn should include("1. e4 e5")
+  }

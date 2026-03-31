@@ -1,6 +1,7 @@
 package de.eljachess.chess.controller
 
 import scala.collection.mutable
+import de.eljachess.chess.model.Pgn
 
 class GameManager(initial: GameController):
   private var current   = initial
@@ -64,3 +65,8 @@ class GameManager(initial: GameController):
     val (snapshot, ctrl, msg) = result
     if snapshot.nonEmpty then snapshot.foreach(_.onUpdate(ctrl, msg))
     msg
+
+  def pgn(whiteName: String, blackName: String): String =
+    synchronized {
+      Pgn.encode(history.reverse, whiteName, blackName, current)
+    }
