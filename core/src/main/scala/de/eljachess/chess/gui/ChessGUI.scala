@@ -75,8 +75,28 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
         case _ => ()
     }
 
+    val exportPgnBtn = Button("Export PGN")
+    exportPgnBtn.setOnAction { _ =>
+      val dialog = new TextInputDialog()
+      dialog.setTitle("Spieler eingeben")
+      dialog.setHeaderText("Spielernamen für PGN")
+      dialog.setContentText("Weiß, Schwarz (kommagetrennt):")
+      dialog.showAndWait().toScala match
+        case Some(input) if input.nonEmpty =>
+          val names = input.split(",").map(_.trim)
+          if names.length == 2 then
+            val pgnStr = manager.pgn(names(0), names(1))
+            val content = new ClipboardContent()
+            content.putString(pgnStr)
+            Clipboard.getSystemClipboard.setContent(content)
+            msgLabel.setText("PGN copied")
+          else
+            msgLabel.setText("Format: White, Black")
+        case _ => ()
+    }
+
     msgLabel.setPadding(Insets(0, 8, 0, 8))
-    val toolbar = HBox(8.0, undoBtn, redoBtn, copyFenBtn, loadFenBtn, msgLabel)
+    val toolbar = HBox(8.0, undoBtn, redoBtn, copyFenBtn, loadFenBtn, exportPgnBtn, msgLabel)
     toolbar.setPadding(Insets(8))
     toolbar.setAlignment(Pos.CENTER_LEFT)
     root.setBottom(toolbar)
