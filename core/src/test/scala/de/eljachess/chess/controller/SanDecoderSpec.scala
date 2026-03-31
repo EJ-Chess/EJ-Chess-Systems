@@ -81,7 +81,7 @@ class SanDecoderSpec extends AnyFlatSpec with Matchers:
   it should "return Left when no piece can make the move" in {
     // Nf6 is not reachable from initial position for White
     SanDecoder.expand(Board.initial, Color.White, "Nf6") match
-      case Left(msg) => msg.toLowerCase should include("illegal")
+      case Left(msg) => msg should include("No piece can make move")
       case Right(_)  => fail("Expected Left for impossible move")
   }
 
@@ -98,4 +98,40 @@ class SanDecoderSpec extends AnyFlatSpec with Matchers:
     SanDecoder.expand(board, Color.White, "Nd1") match
       case Left(msg) => msg.toLowerCase should include("ambiguous")
       case Right(_)  => fail("Expected Left for ambiguous move")
+  }
+
+  it should "expand kingside castling O-O for Black" in {
+    SanDecoder.expand(Board.initial, Color.Black, "O-O") match
+      case Right((from, to, promo)) =>
+        from shouldBe Square(4, 7)  // e8
+        to   shouldBe Square(6, 7)  // g8
+        promo shouldBe None
+      case Left(err) => fail(s"Expected Right, got: $err")
+  }
+
+  it should "expand promotion e8=R to Rook" in {
+    val board = Fen.decode("5k2/4P3/8/8/8/8/8/4K3 w - - 0 1").map(_.board).getOrElse(Board.initial)
+    SanDecoder.expand(board, Color.White, "e8=R") match
+      case Right((from, to, promo)) =>
+        from  shouldBe Square(4, 6)
+        to    shouldBe Square(4, 7)
+        promo shouldBe Some(PieceKind.Rook)
+      case Left(err) => fail(s"Expected Right, got: $err")
+  }
+
+  it should "disambiguate with rank when two knights on same file" in {
+    // Two knights on b1 and b3, both can go to d2 — pick the one on rank 3 with N3d2
+    val board = Fen.decode("8/8/8/8/8/1n6/8/1n2k3 b - - 0 1").map(_.board).getOrElse(Board.initial)
+    SanDecoder.expand(board, Color.Black, "N3d2") match
+      case Right((from, _, _)) => from.toAlgebraic.last shouldBe '3'
+      case Left(err) => fail(s"Expected Right, got: $err")
+  }
+
+  it should "return Left for pawn capture when target is empty" in {
+    // No piece on d5 to capture — exd5 should be illegal
+    val board = Board.initial
+      .move(Square(4, 1), Square(4, 3)).get  // e2-e4 (white)
+    SanDecoder.expand(board, Color.White, "exd5") match
+      case Left(msg) => msg should not be empty
+      case Right(_)  => fail("Expected Left when capture target is empty")
   }

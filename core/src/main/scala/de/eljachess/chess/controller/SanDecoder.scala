@@ -53,7 +53,7 @@ object SanDecoder:
             val candidates = legalCandidates(board, currentColor, destSquare, pieceChar, fileHint, rankHint)
             candidates match
               case Nil =>
-                Left(s"Move $san is illegal: no piece can reach $dest")
+                Left(s"No piece can make move $san")
               case List((from, _)) =>
                 Right((from, destSquare, parsePromotion(promoChar)))
               case _ =>
@@ -66,22 +66,23 @@ object SanDecoder:
     board: Board,
     currentColor: Color,
     dest: Square,
-    pieceChar: String,
-    fileHint: String,
-    rankHint: String
+    pieceChar: String | Null,
+    fileHint: String | Null,
+    rankHint: String | Null
   ): List[(Square, Square)] =
     board.legalMoves(currentColor)
       .filter { case (from, to) =>
         to == dest &&
         matchesPiece(board, from, pieceChar) &&
-        (fileHint == null || from.toAlgebraic.charAt(0) == fileHint.charAt(0)) &&
-        (rankHint == null || from.toAlgebraic.charAt(1) == rankHint.charAt(0))
+        Option(fileHint).forall(f => from.toAlgebraic.charAt(0) == f.charAt(0)) &&
+        Option(rankHint).forall(r => from.toAlgebraic.charAt(1) == r.charAt(0))
       }
 
-  private def matchesPiece(board: Board, from: Square, pieceChar: String): Boolean =
+  private def matchesPiece(board: Board, from: Square, pieceChar: String | Null): Boolean =
     board.pieceAt(from).exists { piece =>
-      if pieceChar == null then piece.kind == PieceKind.Pawn
-      else piece.kind == kindFromChar(pieceChar)
+      Option(pieceChar) match
+        case None    => piece.kind == PieceKind.Pawn
+        case Some(p) => piece.kind == kindFromChar(p)
     }
 
   private def parseSquare(s: String): Option[Square] =
