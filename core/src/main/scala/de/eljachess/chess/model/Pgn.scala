@@ -7,21 +7,22 @@ import java.time.format.DateTimeFormatter
 
 object Pgn:
 
+  private val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
+
   def encode(history: List[(GameController, ParsedMove)],
              whiteName: String,
              blackName: String,
              currentPosition: GameController): String =
-    val headers = buildHeaders(whiteName, blackName, currentPosition)
-    val moveList = buildMoveList(history, currentPosition)
     val result = detectResult(currentPosition)
+    val headers = buildHeaders(whiteName, blackName, result)
+    val moveList = buildMoveList(history, currentPosition)
     if moveList.isEmpty then s"$headers\n\n$result"
     else s"$headers\n\n$moveList $result"
 
   private def buildHeaders(whiteName: String,
                            blackName: String,
-                           currentPosition: GameController): String =
-    val today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd"))
-    val result = detectResult(currentPosition)
+                           result: String): String =
+    val today = LocalDate.now().format(formatter)
     s"""[Event "?"]
        |[Site "?"]
        |[Date "$today"]
@@ -34,12 +35,10 @@ object Pgn:
     val nextToMove = ctrl.currentTurn
     val hasMoves = ctrl.board.legalMoves(nextToMove).nonEmpty
     val inCheck = ctrl.board.isInCheck(nextToMove)
-    if !hasMoves && inCheck then
-      if nextToMove == Color.White then "0-1" else "1-0"
-    else if !hasMoves then
-      "1/2-1/2"
-    else
-      "*"
+    (hasMoves, inCheck) match
+      case (false, true)  => if nextToMove == Color.White then "0-1" else "1-0"
+      case (false, false) => "1/2-1/2"
+      case _              => "*"
 
   private def buildMoveList(history: List[(GameController, ParsedMove)],
                             currentPosition: GameController): String =
