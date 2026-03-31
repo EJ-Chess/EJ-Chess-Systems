@@ -69,3 +69,82 @@ class FenSpec extends AnyFlatSpec with Matchers:
     val ctrl = GameController(Board.initial, fullmoveNumber = 3)
     Fen.encode(ctrl).split(" ")(5) shouldBe "3"
   }
+
+  // ── Decode — round-trip ───────────────────────────────────────────────────
+
+  "Fen.decode" should "round-trip the initial position" in {
+    Fen.decode(Fen.encode(GameController(Board.initial))) shouldBe
+      Right(GameController(Board.initial))
+  }
+
+  it should "round-trip a mid-game position preserving all fields" in {
+    val ctrl = GameController(
+      Board(Board.initial.grid,
+            CastlingRights(whiteKingside = true, whiteQueenside = false,
+                           blackKingside = true, blackQueenside = false),
+            Some(Square(4, 2))),
+      currentTurn    = Color.Black,
+      halfmoveClock  = 5,
+      fullmoveNumber = 3
+    )
+    Fen.decode(Fen.encode(ctrl)) shouldBe Right(ctrl)
+  }
+
+  // ── Decode — known string ─────────────────────────────────────────────────
+
+  it should "decode the initial FEN string to the initial GameController" in {
+    Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") shouldBe
+      Right(GameController(Board.initial))
+  }
+
+  // ── Decode — error cases ──────────────────────────────────────────────────
+
+  it should "return Left for wrong field count (5 fields)" in {
+    Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0") shouldBe
+      a[Left[?, ?]]
+  }
+
+  it should "return Left for wrong field count (7 fields)" in {
+    Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 extra") shouldBe
+      a[Left[?, ?]]
+  }
+
+  it should "return Left for an invalid piece character" in {
+    Fen.decode("Xnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") shouldBe
+      a[Left[?, ?]]
+  }
+
+  it should "return Left when a rank sum is not 8" in {
+    Fen.decode("rnbqkbn/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") shouldBe
+      a[Left[?, ?]]
+  }
+
+  it should "return Left for wrong rank count" in {
+    Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP w KQkq - 0 1") shouldBe
+      a[Left[?, ?]]
+  }
+
+  it should "return Left for invalid active color" in {
+    Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR x KQkq - 0 1") shouldBe
+      a[Left[?, ?]]
+  }
+
+  it should "return Left for invalid castling string" in {
+    Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w ZQkq - 0 1") shouldBe
+      a[Left[?, ?]]
+  }
+
+  it should "return Left for invalid en passant square" in {
+    Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq e9 0 1") shouldBe
+      a[Left[?, ?]]
+  }
+
+  it should "return Left for non-integer halfmove clock" in {
+    Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - x 1") shouldBe
+      a[Left[?, ?]]
+  }
+
+  it should "return Left for zero fullmove number" in {
+    Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0") shouldBe
+      a[Left[?, ?]]
+  }
