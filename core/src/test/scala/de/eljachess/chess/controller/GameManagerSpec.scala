@@ -1,6 +1,6 @@
 package de.eljachess.chess.controller
 
-import de.eljachess.chess.model.{Board, Color, Piece, PieceKind, Square}
+import de.eljachess.chess.model.{Board, Color, Fen, Piece, PieceKind, Pgn, Square}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -142,4 +142,65 @@ class GameManagerSpec extends AnyFlatSpec with Matchers:
     manager.undo()
     manager.move("d2 d4")
     manager.redo() shouldBe "Nothing to redo"
+  }
+
+  "GameManager PGN replay" should "replay a 2-move game e4 e5 correctly" in {
+    val manager = new GameManager(GameController(Board.initial))
+    val (_, moves) = Pgn.decode("1. e4 e5").getOrElse((Map.empty, List.empty))
+    moves shouldBe List("e4", "e5")
+
+    moves.foreach { san =>
+      val ctrl = manager.state
+      SanDecoder.expand(ctrl.board, ctrl.currentTurn, san) match
+        case Left(err) => fail(s"SAN expansion failed: $err")
+        case Right((from, to, _)) =>
+          manager.move(s"${from.toAlgebraic} ${to.toAlgebraic}")
+    }
+
+    manager.state.board.pieceAt(Square(4, 3)) shouldBe Some(Piece(Color.White, PieceKind.Pawn))
+    manager.state.board.pieceAt(Square(4, 4)) shouldBe Some(Piece(Color.Black, PieceKind.Pawn))
+    manager.state.currentTurn shouldBe Color.White
+  }
+
+  it should "replay a game with a pawn advance to the back rank via FEN starting position" in {
+    // Pawn on e7, kings placed safely. Board.move does not implement promotion,
+    // so the piece that arrives on e8 remains a Pawn.
+    Fen.decode("5k2/4P3/8/8/8/8/8/4K3 w - - 0 1") match
+      case Left(err) => fail(s"FEN decode failed: $err")
+      case Right(fenState) =>
+        val ctrl    = GameController(fenState.board, fenState.activeColor)
+        val manager = new GameManager(ctrl)
+        val (_, moves) = Pgn.decode("1. e8=Q").getOrElse((Map.empty, List.empty))
+        moves.foreach { san =>
+          val c = manager.state
+          SanDecoder.expand(c.board, c.currentTurn, san) match
+            case Left(err) => fail(s"SAN expand failed: $err")
+            case Right((from, to, _)) =>
+              manager.move(s"${from.toAlgebraic} ${to.toAlgebraic}")
+        }
+        // Board does not implement promotion; the pawn moves to e8 and stays a Pawn
+        manager.state.board.pieceAt(Square(4, 7)) shouldBe Some(Piece(Color.White, PieceKind.Pawn))
+  }
+
+  it should "stop at first illegal SAN move and leave board at last valid position" in {
+    val manager = new GameManager(GameController(Board.initial))
+    val sanMoves = List("e4", "e5", "Xe6")  // Xe6 is invalid SAN
+
+    var stopped = false
+    var halfmove = 1
+    sanMoves.foreach { san =>
+      if !stopped then
+        val ctrl = manager.state
+        SanDecoder.expand(ctrl.board, ctrl.currentTurn, san) match
+          case Left(_) => stopped = true
+          case Right((from, to, _)) =>
+            manager.move(s"${from.toAlgebraic} ${to.toAlgebraic}")
+            halfmove += 1
+    }
+
+    stopped shouldBe true
+    halfmove shouldBe 3  // stopped at the 3rd move
+    // board should be at position after e4 e5 (2 halfmoves played)
+    manager.state.board.pieceAt(Square(4, 3)) shouldBe Some(Piece(Color.White, PieceKind.Pawn))
+    manager.state.board.pieceAt(Square(4, 4)) shouldBe Some(Piece(Color.Black, PieceKind.Pawn))
   }
