@@ -37,3 +37,17 @@ out of scope for this feature.
 **Suggested Next Step:**
 Add TestFX as a test dependency and write a headless smoke test that launches
 the application with a mock GameManager to verify board rendering and button callbacks.
+
+## [2026-03-31] PGN SAN disambiguation — FIDE case 3 (3+ same-kind pieces)
+
+**Requirement / Bug:**
+When three or more pieces of the same kind and color can all reach the same destination square, FIDE disambiguation requires the full square (file + rank) in SAN. The current implementation in `Pgn.sanForPieceMove` only emits one character (file or rank) in this case.
+
+**Root Cause:**
+`Pgn.scala` lines ~79-83: the disambiguation logic handles two-piece disambiguation (FIDE cases 1 and 2) but silently falls through to a one-character disambiguator for the three-piece case.
+
+**Attempted Fixes:**
+None — deferred as an edge case requiring three or more promoted pieces.
+
+**Suggested Next Step:**
+After counting all other pieces of the same kind/color that can reach `to`, if more than one share both file and rank, emit `from.toAlgebraic` (full square) instead of one character.

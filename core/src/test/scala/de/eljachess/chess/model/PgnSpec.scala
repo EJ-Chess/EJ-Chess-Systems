@@ -139,7 +139,7 @@ class PgnSpec extends AnyFlatSpec with Matchers:
     Pgn.sanForMove(board, move, boardAfter) shouldBe "Nf6+"
   }
 
-  it should "detect checkmate as 1-0 when Black to move and checkmated" in {
+  it should "append checkmate symbol # to SAN for Fool's mate Qh4" in {
     // Fool's mate: 1.f3 e5 2.g4 Qh4#
     val (ctrl1, _) = GameController(Board.initial).handleCommand("f2 f3")
     val (ctrl2, _) = ctrl1.handleCommand("e7 e5")
