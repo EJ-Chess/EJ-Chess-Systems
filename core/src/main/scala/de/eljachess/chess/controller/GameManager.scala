@@ -47,6 +47,9 @@ class GameManager(initial: GameController):
     if snapshot.nonEmpty then snapshot.foreach(_.onUpdate(ctrl, msg))
     msg
 
+  private[controller] def historyHead: Option[(GameController, ParsedMove)] =
+    synchronized { history.headOption }
+
   def redo(caller: Observer | Null = null): String =
     val result = synchronized {
       future match

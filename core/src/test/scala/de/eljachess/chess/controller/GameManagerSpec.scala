@@ -1,6 +1,7 @@
 package de.eljachess.chess.controller
 
 import de.eljachess.chess.model.{Board, Color, Piece, PieceKind, Square}
+import de.eljachess.chess.controller.ParsedMove
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -142,4 +143,21 @@ class GameManagerSpec extends AnyFlatSpec with Matchers:
     manager.undo()
     manager.move("d2 d4")
     manager.redo() shouldBe "Nothing to redo"
+  }
+
+  "GameManager.historyHead" should "store the ParsedMove in history after a move" in {
+    val manager = GameManager(GameController(Board.initial))
+    manager.move("e2 e4")
+    manager.historyHead should be(defined)
+    manager.historyHead.get._2 shouldBe ParsedMove.Move(Square(4, 1), Square(4, 3), None)
+  }
+
+  it should "restore ParsedMove when redoing after undo" in {
+    val manager = GameManager(GameController(Board.initial))
+    manager.move("e2 e4")
+    manager.undo()
+    manager.historyHead shouldBe None
+    manager.redo()
+    manager.historyHead should be(defined)
+    manager.historyHead.get._2 shouldBe ParsedMove.Move(Square(4, 1), Square(4, 3), None)
   }
