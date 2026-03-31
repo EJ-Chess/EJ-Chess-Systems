@@ -287,3 +287,10 @@ class GameControllerSpec extends AnyFlatSpec with Matchers:
     reset.board shouldBe Board.initial
     msg shouldBe "Position loaded"
   }
+
+  it should "preserve state and return error message for invalid FEN on load command" in {
+    val ctrl = GameController(Board.initial)
+    val (result, msg) = ctrl.handleCommand("load not-valid-fen")
+    result shouldBe ctrl
+    msg should startWith ("Invalid FEN:")
+  }
