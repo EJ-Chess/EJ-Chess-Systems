@@ -171,3 +171,14 @@ class GameManagerSpec extends AnyFlatSpec with Matchers:
     pgn should include("[Black \"Bob\"]")
     pgn should include("1. e4 e5")
   }
+
+  "GameManager.addObserver" should "not add the same observer twice" in {
+    val manager = GameManager(GameController(Board.initial))
+    val log = scala.collection.mutable.ListBuffer.empty[String]
+    val obs = new Observer:
+      def onUpdate(ctrl: GameController, msg: String): Unit = log += msg
+    manager.addObserver(obs)
+    manager.addObserver(obs)  // duplicate — should be ignored
+    manager.move("e2 e4")
+    log.size shouldBe 1  // observer called only once
+  }

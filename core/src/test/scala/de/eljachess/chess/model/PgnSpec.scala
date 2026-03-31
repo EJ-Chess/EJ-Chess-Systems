@@ -151,3 +151,129 @@ class PgnSpec extends AnyFlatSpec with Matchers:
     val boardAfter = ctrl4.board
     Pgn.sanForMove(board, move, boardAfter) shouldBe "Qh4#"
   }
+
+  // ── detectResult 1-0 ──────────────────────────────────────────────────
+
+  "Pgn.encode" should "detect checkmate as 1-0 when White checkmated Black" in {
+    // k1R5/8/KQ6/8/8/8/8/8 b - - 0 1
+    // Black king a8 is in check from rook c8; no legal escape
+    val fenStr = "k1R5/8/KQ6/8/8/8/8/8 b - - 0 1"
+    val Right(ctrl) = Fen.decode(fenStr)
+    val pgn = Pgn.encode(List(), "White", "Black", ctrl)
+    pgn should include("[Result \"1-0\"]")
+    pgn should endWith("1-0")
+  }
+
+  // ── Piece move SAN (Rook, Bishop, Knight) ────────────────────────────
+
+  it should "convert rook move a1-a5 to SAN \"Ra5\"" in {
+    val grid = Map(
+      Square(0, 0) -> Piece(Color.White, PieceKind.Rook),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.King)
+    )
+    val board = Board(grid)
+    val move  = ParsedMove.Move(Square(0, 0), Square(0, 4), None)
+    val boardAfter = board.move(Square(0, 0), Square(0, 4), None).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "Ra5"
+  }
+
+  it should "convert bishop move c1-f4 to SAN \"Bf4\"" in {
+    val grid = Map(
+      Square(2, 0) -> Piece(Color.White, PieceKind.Bishop),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.King)
+    )
+    val board = Board(grid)
+    val move  = ParsedMove.Move(Square(2, 0), Square(5, 3), None)
+    val boardAfter = board.move(Square(2, 0), Square(5, 3), None).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "Bf4"
+  }
+
+  // ── Disambiguation by rank (same file) ──────────────────────────────
+
+  it should "disambiguate by rank when two rooks share the same file" in {
+    // Ra1 and Ra3 both can move to a2; use rank digit to disambiguate
+    val grid = Map(
+      Square(0, 0) -> Piece(Color.White, PieceKind.Rook),
+      Square(0, 2) -> Piece(Color.White, PieceKind.Rook)
+    )
+    val board = Board(grid)
+    val move  = ParsedMove.Move(Square(0, 0), Square(0, 1), None)
+    val boardAfter = board.move(Square(0, 0), Square(0, 1), None).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "R1a2"
+  }
+
+  // ── Promotion pieceChar (Rook, Bishop, Knight) ───────────────────────
+
+  it should "convert pawn promotion e7-e8=R to SAN \"e8=R\"" in {
+    val grid = Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn))
+    val board = Board(grid)
+    val move  = ParsedMove.Move(Square(4, 6), Square(4, 7), Some(PieceKind.Rook))
+    val boardAfter = board.move(Square(4, 6), Square(4, 7), Some(PieceKind.Rook)).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "e8=R"
+  }
+
+  it should "convert pawn promotion e7-e8=B to SAN \"e8=B\"" in {
+    val grid = Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn))
+    val board = Board(grid)
+    val move  = ParsedMove.Move(Square(4, 6), Square(4, 7), Some(PieceKind.Bishop))
+    val boardAfter = board.move(Square(4, 6), Square(4, 7), Some(PieceKind.Bishop)).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "e8=B"
+  }
+
+  it should "convert pawn promotion e7-e8=N to SAN \"e8=N\"" in {
+    val grid = Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn))
+    val board = Board(grid)
+    val move  = ParsedMove.Move(Square(4, 6), Square(4, 7), Some(PieceKind.Knight))
+    val boardAfter = board.move(Square(4, 6), Square(4, 7), Some(PieceKind.Knight)).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "e8=N"
+  }
+
+  it should "convert king move e1-f2 to SAN \"Kf2\"" in {
+    val grid = Map(
+      Square(4, 0) -> Piece(Color.White, PieceKind.King),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.King)
+    )
+    val board = Board(grid)
+    val move  = ParsedMove.Move(Square(4, 0), Square(5, 1), None)
+    val boardAfter = board.move(Square(4, 0), Square(5, 1), None).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "Kf2"
+  }
+
+  it should "disambiguate by file when two knights on different files can reach the same square" in {
+    // Nb1 and Nf3 can both reach d2; use file letter 'b' for the b1 knight
+    val grid = Map(
+      Square(1, 0) -> Piece(Color.White, PieceKind.Knight),
+      Square(5, 2) -> Piece(Color.White, PieceKind.Knight)
+    )
+    val board = Board(grid)
+    val move  = ParsedMove.Move(Square(1, 0), Square(3, 1), None)
+    val boardAfter = board.move(Square(1, 0), Square(3, 1), None).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "Nbd2"
+  }
+
+  // ── Exception paths ─────────────────────────────────────────────────────
+
+  "Pgn.sanForMove" should "throw when a non-move ParsedMove (FenQuery) is passed" in {
+    val board = Board.initial
+    a [Exception] should be thrownBy {
+      Pgn.sanForMove(board, ParsedMove.FenQuery, board)
+    }
+  }
+
+  it should "throw when the from square has no piece" in {
+    // Empty board — no piece at any square
+    val board = Board(Map.empty, CastlingRights(false, false, false, false), None)
+    val move = ParsedMove.Move(Square(4, 1), Square(4, 3), None)
+    a [Exception] should be thrownBy {
+      Pgn.sanForMove(board, move, board)
+    }
+  }
+
+  it should "throw for invalid promotion piece kind (Pawn)" in {
+    val grid = Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn))
+    val board = Board(grid, CastlingRights(false, false, false, false), None)
+    val move = ParsedMove.Move(Square(4, 6), Square(4, 7), Some(PieceKind.Pawn))
+    a [Exception] should be thrownBy {
+      Pgn.sanForMove(board, move, board)
+    }
+  }
