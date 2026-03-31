@@ -10,9 +10,9 @@ Add PGN (Portable Game Notation) export to the chess engine, TUI, and GUI. A pur
 
 ## Requirements
 
-1. **PGN export:** `Pgn.encode(history: List[(GameController, ParsedMove)], whiteName: String, blackName: String): String` produces a valid PGN string with 7-tag headers and move list in SAN.
+1. **PGN export:** `Pgn.encode(history: List[(GameController, ParsedMove)], whiteName: String, blackName: String, currentPosition: GameController): String` produces a valid PGN string with 7-tag headers and move list in SAN.
 2. **SAN generation:** Each move is converted to Standard Algebraic Notation (e.g., `"e4"`, `"Nf3"`, `"Nxe5"`, `"O-O"`, `"e8=Q"`, `"Qh5#"`).
-3. **Headers:** PGN includes the Seven Tag Roster: Event, Site, Date (system clock), Round, White (user-provided), Black (user-provided), Result (auto-detected: `"*"` in progress, `"1-0"` White wins, `"0-1"` Black wins, `"1/2-1/2"` draw).
+3. **Headers:** PGN includes the Seven Tag Roster: Event, Site, Date (YYYY.MM.DD format of system clock at time of export), Round, White (user-provided), Black (user-provided), Result (auto-detected: `"*"` in progress, `"1-0"` White wins, `"0-1"` Black wins, `"1/2-1/2"` draw).
 4. **GUI export:** "Export PGN" button opens a dialog prompting for White and Black player names; on completion, copies PGN to system clipboard and displays "PGN copied".
 5. **GameManager tracking:** `GameManager` stores each historical move alongside its position via `List[(GameController, ParsedMove)]` to reconstruct the move sequence for SAN generation.
 6. **Error handling:** Invalid moves or missing data result in graceful error messages without corrupting state.
@@ -86,7 +86,8 @@ The `undo()` and `redo()` methods work identically on the tuples.
 object Pgn:
   def encode(history: List[(GameController, ParsedMove)],
              whiteName: String,
-             blackName: String): String
+             blackName: String,
+             currentPosition: GameController): String
 ```
 
 Algorithm:
@@ -94,16 +95,18 @@ Algorithm:
    ```
    [Event "?"]
    [Site "?"]
-   [Date "2026.03.31"]
+   [Date "YYYY.MM.DD"]
    [Round "?"]
    [White "whiteName"]
    [Black "blackName"]
    [Result "result"]
    ```
-   where `result` is determined from the final position:
-   - Checkmate (nextTurn has no legal moves and is in check) → `"1-0"` (if White won) or `"0-1"` (if Black won)
-   - Stalemate (nextTurn has no legal moves, not in check) → `"1/2-1/2"`
-   - Otherwise → `"*"` (in progress)
+   where:
+   - `Date` is the system clock's local date in YYYY.MM.DD format at the time `encode` is called
+   - `result` is determined from `currentPosition`:
+     - If the player to move in `currentPosition` has no legal moves AND is in check → checkmate. Result is `"0-1"` if White to move (Black won), `"1-0"` if Black to move (White won).
+     - If the player to move has no legal moves but is NOT in check → stalemate → `"1/2-1/2"`
+     - Otherwise (legal moves available) → `"*"` (in progress)
 
 2. Convert each move to SAN via `sanForMove(boardBefore, parsedMove, boardAfter)` (see SAN generation below).
 
@@ -131,24 +134,26 @@ private def sanForMove(boardBefore: Board,
 For each `ParsedMove` case:
 
 **`Move(from, to, promotion)`:**
-1. Determine the piece at `from` on `boardBefore`.
-2. Build the base move string:
+1. Determine the piece at `from` on `boardBefore`. Let `movingColor` = color of that piece.
+2. Apply the move to `boardBefore` to get `boardAfter`.
+3. The next player to move is the opposite of `movingColor`.
+4. Build the base move string:
    - **Pawn:** no piece letter. If capture: `file(from)x<dest>`, else `<dest>`
    - **Other pieces:** `<piece><disambiguation><capture><dest><promotion><check>`
      - `<piece>` = K, Q, R, B, N
-     - `<disambiguation>` = empty unless two pieces of the same kind (same color, same piece kind) can both reach `to` from their current positions. Then add file or rank of `from` to disambiguate. If both file and rank differ, add both.
+     - `<disambiguation>` = empty unless two pieces of the same kind (same `movingColor`, same piece kind) can both reach `to` from their current positions on `boardBefore`. Then add file or rank of `from` to disambiguate. If both file and rank differ, add both.
      - `<capture>` = `x` if `boardBefore.pieceAt(to)` is non-empty, else empty
      - `<dest>` = algebraic notation of `to` (e.g., `"e5"`)
      - `<promotion>` = empty unless `promotion.isDefined`. Then `=<piece>` where piece is `promotion.get`
-     - `<check>` = `#` if `boardAfter.isInCheck(opposite(pieceColor))` and no legal moves (checkmate), else `+` if `isInCheck`, else empty
+     - `<check>` = `#` if `boardAfter.isInCheck(opposite(movingColor))` and `boardAfter.legalMoves(opposite(movingColor)).isEmpty` (checkmate), else `+` if `boardAfter.isInCheck(opposite(movingColor))` (check), else empty
 
-3. Return the built string.
+5. Return the built string.
 
 **`Castling(kingside)`:**
 - Return `"O-O"` if kingside, `"O-O-O"` if queenside.
 
 **`FenQuery`, `FenLoad`, `PgnQuery`:**
-- Not move commands; should not appear in the game history for PGN purposes. If encountered during encoding, skip or raise an error (implementation detail).
+- Not move commands. Should never appear in the game history (they do not change game state). If `Pgn.encode` encounters them during iteration, it must raise an exception with a clear error message (defensive approach to catch bugs early).
 
 ### GUI Changes
 
@@ -192,30 +197,11 @@ Add to `GameManager`:
 ```scala
 def pgn(whiteName: String, blackName: String): String =
   synchronized {
-    val fullHistory = history.reverse ++ List((current, ParsedMove.Move(Square(0, 0), Square(0, 0), None)))
-    // The sentinel move at the end is a placeholder; Pgn.encode will ignore it or skip it.
-    // Alternative: reconstruct history without the placeholder and defer to the final position.
-    Pgn.encode(history.reverse, whiteName, blackName)
-  }
-```
-
-Actually, a cleaner approach:
-```scala
-def pgn(whiteName: String, blackName: String): String =
-  synchronized {
     Pgn.encode(history.reverse, whiteName, blackName, current)
   }
 ```
 
-where `Pgn.encode` signature becomes:
-```scala
-def encode(history: List[(GameController, ParsedMove)],
-           whiteName: String,
-           blackName: String,
-           currentPosition: GameController): String
-```
-
-This way, the final position is always known and result detection uses `currentPosition`.
+This passes the full game history (oldest move first) and the current position, which allows `Pgn.encode` to detect the game result correctly.
 
 ## Testing
 
