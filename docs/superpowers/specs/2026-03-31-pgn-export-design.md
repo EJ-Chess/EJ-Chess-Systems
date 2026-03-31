@@ -110,13 +110,15 @@ Algorithm:
 
 2. Convert each move to SAN via `sanForMove(boardBefore, parsedMove, boardAfter)` (see SAN generation below).
 
-3. Format the move list with standard move numbering:
-   ```
-   1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 ...
-   ```
-   - Odd-numbered moves (White): `n. move`
-   - Even-numbered moves (Black): `move` (no new line after each pair)
-   - Move numbers restart at 1 for each pair of White/Black moves
+3. Iterate over the history list. For each tuple `(ctrl, move)` at index i:
+   - `boardBefore = ctrl.board` (the position before the move was played)
+   - `boardAfter = history[i+1].1.board` (the position from the next tuple), OR apply `move` to `boardBefore` to compute it
+   - Call `sanForMove(boardBefore, move, boardAfter)` to get the SAN string for this move
+   - Append to the move list with standard numbering:
+     ```
+     1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 ...
+     ```
+     where odd-numbered moves (White) are formatted as `n. move` and even-numbered (Black) as `move` (no new line between pairs)
 
 4. Append the result symbol at the end: ` 1-0`, ` 0-1`, ` 1/2-1/2`, or ` *`
 
@@ -124,8 +126,12 @@ Algorithm:
 
 ### SAN Generation
 
-Private helper method:
+Private helper methods in the `Pgn` object:
+
 ```scala
+private def opposite(color: Color): Color =
+  if color == Color.White then Color.Black else Color.White
+
 private def sanForMove(boardBefore: Board,
                        move: ParsedMove,
                        boardAfter: Board): String
