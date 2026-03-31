@@ -5,7 +5,9 @@ import de.eljachess.chess.model.{Color as ChessColor, Piece, PieceKind, Square}
 import javafx.application.Platform
 import javafx.geometry.{Insets, Pos}
 import javafx.scene.Scene
-import javafx.scene.control.{Button, ChoiceDialog, Label}
+import javafx.scene.control.{Button, ChoiceDialog, Label, TextInputDialog}
+import javafx.scene.input.{Clipboard, ClipboardContent}
+import scala.jdk.OptionConverters.*
 import javafx.scene.layout.{BorderPane, GridPane, HBox, StackPane}
 import javafx.scene.shape.Rectangle
 import javafx.scene.text.{Font, Text}
@@ -50,8 +52,31 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
     val redoBtn = Button("Redo")
     undoBtn.setOnAction(_ => doAction(manager.undo(this)))
     redoBtn.setOnAction(_ => doAction(manager.redo(this)))
+
+    val copyFenBtn = Button("Copy FEN")
+    copyFenBtn.setOnAction { _ =>
+      val fenStr  = manager.move("fen", this)
+      val content = new ClipboardContent()
+      content.putString(fenStr)
+      Clipboard.getSystemClipboard.setContent(content)
+      msgLabel.setText("FEN copied")
+    }
+
+    val loadFenBtn = Button("Load FEN")
+    loadFenBtn.setOnAction { _ =>
+      val dialog = new TextInputDialog()
+      dialog.setTitle("FEN laden")
+      dialog.setHeaderText("FEN-String eingeben")
+      dialog.setContentText("FEN:")
+      dialog.showAndWait().toScala match
+        case Some(input) if input.nonEmpty =>
+          val msg = manager.move(s"load $input", this)
+          selected = None; currentCtrl = manager.state; redrawBoard(currentCtrl); msgLabel.setText(msg)
+        case _ => ()
+    }
+
     msgLabel.setPadding(Insets(0, 8, 0, 8))
-    val toolbar = HBox(8.0, undoBtn, redoBtn, msgLabel)
+    val toolbar = HBox(8.0, undoBtn, redoBtn, copyFenBtn, loadFenBtn, msgLabel)
     toolbar.setPadding(Insets(8))
     toolbar.setAlignment(Pos.CENTER_LEFT)
     root.setBottom(toolbar)
