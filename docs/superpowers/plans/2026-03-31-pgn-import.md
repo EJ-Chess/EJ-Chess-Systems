@@ -330,22 +330,18 @@ import de.eljachess.chess.model.{Board, Color, PieceKind, Square}
 
 object SanDecoder:
 
-  def expand(board: Board, san: String): Either[String, (Square, Square, Option[PieceKind])] =
+  def expand(board: Board, currentColor: Color, san: String): Either[String, (Square, Square, Option[PieceKind])] =
     val normalized = san.trim.replaceAll("[+#]", "") // remove check/mate suffix
 
     // Try castling first
     if normalized == "O-O" then
-      val (from, to) = if board.legalMoves(Color.White).exists(m => m._1.toAlgebraic == "e1" && m._2(0).toAlgebraic == "g1") then
-        (Square(4, 0), Square(6, 0))
-      else
-        (Square(4, 7), Square(6, 7))
+      val row = if currentColor == Color.White then 0 else 7
+      val (from, to) = (Square(4, row), Square(6, row))
       return Right((from, to, None))
 
     if normalized == "O-O-O" then
-      val (from, to) = if board.legalMoves(Color.White).exists(m => m._1.toAlgebraic == "e1" && m._2(0).toAlgebraic == "c1") then
-        (Square(4, 0), Square(2, 0))
-      else
-        (Square(4, 7), Square(2, 7))
+      val row = if currentColor == Color.White then 0 else 7
+      val (from, to) = (Square(4, row), Square(2, row))
       return Right((from, to, None))
 
     // Parse SAN components
@@ -376,8 +372,8 @@ object SanDecoder:
     else
       None
 
-  private def findLegalMovesToDestination(board: Board, dest: Square, piece: String, file: String, rank: String): List[(Square, Square)] =
-    val allMoves = board.legalMoves(board.currentColor)
+  private def findLegalMovesToDestination(board: Board, dest: Square, piece: String, file: String, rank: String, currentColor: Color): List[(Square, Square)] =
+    val allMoves = board.legalMoves(currentColor)
     allMoves.flatMap { case (from, destinations) =>
       destinations.filter(_ == dest).map(to => (from, to))
     }.filter { case (from, to) =>
@@ -392,6 +388,7 @@ object SanDecoder:
       val matchesFile = file == null || from.toAlgebraic(0) == file(0)
       val matchesRank = rank == null || from.toAlgebraic(1) == rank(0)
 
+      // board.legalMoves already validates king-not-in-check, so this is safe
       matchesPiece && matchesFile && matchesRank
     }.toList
 
@@ -428,9 +425,10 @@ git commit -m "feat: add SanDecoder.expand for SAN notation conversion"
 
 - [ ] **Step 1: Extract helper method for button building**
 
-Add helper method to ChessGUI:
+Add helper methods to ChessGUI (wrapped in scoverage exclusion):
 
 ```scala
+// $COVERAGE-OFF$
 private def buildImportPgnButton(manager: GameManager): Button =
   val button = new Button("Import PGN")
   button.setOnAction { _ =>
@@ -463,13 +461,19 @@ private def importPgnFile(file: java.io.File, manager: GameManager): Unit =
 private def replayPgn(moves: List[String], manager: GameManager, headers: Map[String, String]): Unit =
   var moveIndex = 1
   for (san <- moves) {
-    val boardBefore = manager.state.board
-    SanDecoder.expand(boardBefore, san) match
+    val ctrl = manager.state
+    val boardBefore = ctrl.board
+    val currentColor = ctrl.currentTurn
+    SanDecoder.expand(boardBefore, currentColor, san) match
       case Left(error) =>
         msgLabel.setText(s"Halfmove $moveIndex: $error")
         return
       case Right((from, to, promo)) =>
-        val algebraic = s"${from.toAlgebraic} ${to.toAlgebraic}" + promo.map(k => s" ${k.toString.charAt(0)}").getOrElse("")
+        // Format: "e2 e4" for regular moves, "e7 e8 Q" for promotions
+        val algebraicBase = s"${from.toAlgebraic} ${to.toAlgebraic}"
+        val algebraic = promo match
+          case Some(kind) => s"$algebraicBase ${kind.toString.charAt(0)}"
+          case None => algebraicBase
         val msg = manager.move(algebraic)
         if msg.startsWith("Invalid") || msg.startsWith("It's") then
           msgLabel.setText(s"Halfmove $moveIndex: $msg")
@@ -479,15 +483,18 @@ private def replayPgn(moves: List[String], manager: GameManager, headers: Map[St
   val whiteName = headers.getOrElse("White", "White")
   val blackName = headers.getOrElse("Black", "Black")
   msgLabel.setText(s"PGN imported: $whiteName vs $blackName")
+// $COVERAGE-ON$
 ```
 
 - [ ] **Step 2: Add button to toolbar in buildScene**
 
-In `buildScene()` method, add after Load FEN button:
+In `buildScene()` method (around line 50-60), find where `copyFenBtn` and `loadFenBtn` are added to toolbar. Add after those buttons:
 
 ```scala
+// $COVERAGE-OFF$
 val importButton = buildImportPgnButton(manager)
 toolbar.getItems.add(importButton)
+// $COVERAGE-ON$
 ```
 
 - [ ] **Step 3: Run tests**
