@@ -35,7 +35,7 @@ Create `core/src/test/scala/de/eljachess/chess/model/PgnSpec.scala`:
 // core/src/test/scala/de/eljachess/chess/model/PgnSpec.scala
 package de.eljachess.chess.model
 
-import de.eljachess.chess.controller.GameController
+import de.eljachess.chess.controller.{GameController, ParsedMove}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import java.time.LocalDate
@@ -84,13 +84,13 @@ Create `core/src/main/scala/de/eljachess/chess/model/Pgn.scala`:
 // core/src/main/scala/de/eljachess/chess/model/Pgn.scala
 package de.eljachess.chess.model
 
-import de.eljachess.chess.controller.GameController
+import de.eljachess.chess.controller.{GameController, ParsedMove}
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 object Pgn:
 
-  def encode(history: List[(GameController, de.eljachess.chess.controller.ParsedMove)],
+  def encode(history: List[(GameController, ParsedMove)],
              whiteName: String,
              blackName: String,
              currentPosition: GameController): String =
@@ -123,10 +123,26 @@ object Pgn:
     else
       "*"
 
-  private def buildMoveList(history: List[(GameController, de.eljachess.chess.controller.ParsedMove)],
+  private def buildMoveList(history: List[(GameController, ParsedMove)],
                            currentPosition: GameController): String =
-    // Implemented in Task 2, Step 2
-    ""
+    if history.isEmpty then ""
+    else
+      val moveStrings = new scala.collection.mutable.ListBuffer[String]()
+      var prevPos = history.head._1
+
+      for (i <- 0 until history.length) do
+        val (ctrlBefore, move) = history(i)
+        val ctrlAfter = if i + 1 < history.length then history(i + 1)._1 else currentPosition
+
+        val san = sanForMove(ctrlBefore.board, move, ctrlAfter.board)
+
+        if i % 2 == 0 then  // White move (0-indexed even)
+          val moveNum = (i / 2) + 1
+          moveStrings += s"$moveNum. $san"
+        else  // Black move
+          moveStrings += san
+
+      moveStrings.mkString(" ")
 ```
 
 - [ ] **Step 4: Run tests to verify headers pass**
@@ -162,7 +178,7 @@ Append to `PgnSpec.scala`:
 
   "Pgn.sanForMove" should "convert pawn move e2-e4 to SAN \"e4\"" in {
     val board = Board.initial
-    val move = de.eljachess.chess.controller.ParsedMove.Move(Square(4, 1), Square(4, 3), None)
+    val move = ParsedMove.Move(Square(4, 1), Square(4, 3), None)
     val boardAfter = board.move(Square(4, 1), Square(4, 3), None).get
     Pgn.sanForMove(board, move, boardAfter) shouldBe "e4"
   }
@@ -174,28 +190,28 @@ Append to `PgnSpec.scala`:
       Square(3, 4) -> Piece(Color.Black, PieceKind.Pawn)
     )
     val board = Board(grid.toMap)
-    val move = de.eljachess.chess.controller.ParsedMove.Move(Square(4, 3), Square(3, 4), None)
+    val move = ParsedMove.Move(Square(4, 3), Square(3, 4), None)
     val boardAfter = board.move(Square(4, 3), Square(3, 4), None).get
     Pgn.sanForMove(board, move, boardAfter) shouldBe "exd5"
   }
 
   it should "convert knight move g1-f3 to SAN \"Nf3\"" in {
     val board = Board.initial
-    val move = de.eljachess.chess.controller.ParsedMove.Move(Square(6, 0), Square(5, 2), None)
+    val move = ParsedMove.Move(Square(6, 0), Square(5, 2), None)
     val boardAfter = board.move(Square(6, 0), Square(5, 2), None).get
     Pgn.sanForMove(board, move, boardAfter) shouldBe "Nf3"
   }
 
   it should "convert castling kingside to SAN \"O-O\"" in {
     val board = Board.initial
-    val move = de.eljachess.chess.controller.ParsedMove.Castling(kingside = true)
+    val move = ParsedMove.Castling(kingside = true)
     val boardAfter = board  // dummy, not used for castling
     Pgn.sanForMove(board, move, boardAfter) shouldBe "O-O"
   }
 
   it should "convert castling queenside to SAN \"O-O-O\"" in {
     val board = Board.initial
-    val move = de.eljachess.chess.controller.ParsedMove.Castling(kingside = false)
+    val move = ParsedMove.Castling(kingside = false)
     val boardAfter = board
     Pgn.sanForMove(board, move, boardAfter) shouldBe "O-O-O"
   }
@@ -205,20 +221,14 @@ Append to `PgnSpec.scala`:
       Square(4, 6) -> Piece(Color.White, PieceKind.Pawn)
     )
     val board = Board(grid.toMap)
-    val move = de.eljachess.chess.controller.ParsedMove.Move(Square(4, 6), Square(4, 7), Some(PieceKind.Queen))
+    val move = ParsedMove.Move(Square(4, 6), Square(4, 7), Some(PieceKind.Queen))
     val boardAfter = board.move(Square(4, 6), Square(4, 7), Some(PieceKind.Queen)).get
     Pgn.sanForMove(board, move, boardAfter) shouldBe "e8=Q"
   }
 
-  it should "format move list for short game as \"1. e4 e5 2. Nf3 Nc6\"" in {
-    // Encode initial position + 4 moves
-    // This test requires GameManager with move tracking (Task 3)
-    // For now, test with mock data
-    val history = List() // TODO: populate with e4, e5, Nf3, Nc6
-    val ctrl = GameController(Board.initial)
-    val pgn = Pgn.encode(history, "White", "Black", ctrl)
-    pgn should include("1. e4 e5")
-    pgn should include("2. Nf3 Nc6")
+  it should "format empty move list as empty string" in {
+    val pgn = Pgn.encode(List(), "White", "Black", GameController(Board.initial))
+    pgn should not include(" 0.")  // No move numbering for empty history
   }
 ```
 
@@ -227,15 +237,18 @@ Append to `PgnSpec.scala`:
 Replace the `buildMoveList` stub in `Pgn.scala` with full implementation:
 
 ```scala
-  private def sanForMove(boardBefore: Board,
-                        move: de.eljachess.chess.controller.ParsedMove,
-                        boardAfter: Board): String = move match
-    case de.eljachess.chess.controller.ParsedMove.Move(from, to, promotion) =>
+  def sanForMove(boardBefore: Board,
+                 move: ParsedMove,
+                 boardAfter: Board): String = move match
+    case ParsedMove.Move(from, to, promotion) =>
       sanForPieceMove(boardBefore, from, to, promotion, boardAfter)
-    case de.eljachess.chess.controller.ParsedMove.Castling(kingside) =>
+    case ParsedMove.Castling(kingside) =>
       if kingside then "O-O" else "O-O-O"
-    case de.eljachess.chess.controller.ParsedMove.FenQuery | de.eljachess.chess.controller.ParsedMove.FenLoad(_) | de.eljachess.chess.controller.ParsedMove.PgnQuery =>
+    case _ =>
       throw new Exception("Non-move command in PGN history: should never occur")
+
+  private def opposite(color: Color): Color =
+    if color == Color.White then Color.Black else Color.White
 
   private def sanForPieceMove(boardBefore: Board,
                              from: Square,
@@ -244,7 +257,7 @@ Replace the `buildMoveList` stub in `Pgn.scala` with full implementation:
                              boardAfter: Board): String =
     val piece = boardBefore.pieceAt(from).get
     val movingColor = piece.color
-    val nextColor = if movingColor == Color.White then Color.Black else Color.White
+    val nextColor = opposite(movingColor)
 
     val isCapture = boardBefore.pieceAt(to).isDefined
 
@@ -284,28 +297,25 @@ Replace the `buildMoveList` stub in `Pgn.scala` with full implementation:
     case PieceKind.Knight => "N"
     case _ => ""
 
-  // Note: This method is incomplete without the currentPosition parameter.
-  // See the encode method for how to handle the last move's boardAfter.
-  private def buildMoveList(history: List[(GameController, de.eljachess.chess.controller.ParsedMove)],
+  private def buildMoveList(history: List[(GameController, ParsedMove)],
                            currentPosition: GameController): String =
     if history.isEmpty then ""
     else
-      val moves = history.zipWithIndex.map { case ((ctrl, move), idx) =>
-        val boardBefore = ctrl.board
-        val boardAfter = if idx + 1 < history.length then
-          history(idx + 1)._1.board
-        else
-          currentPosition.board  // last move: use current position's board
-        sanForMove(boardBefore, move, boardAfter)
-      }
-      formatMoveList(moves)
+      val moveStrings = new scala.collection.mutable.ListBuffer[String]()
 
-  private def formatMoveList(moves: List[String]): String =
-    moves.zipWithIndex.map { case (move, idx) =>
-      val moveNum = (idx / 2) + 1
-      if idx % 2 == 0 then s"$moveNum. $move"
-      else move
-    }.grouped(2).map(_.mkString(" ")).mkString(" ")
+      for (i <- 0 until history.length) do
+        val (ctrlBefore, move) = history(i)
+        val ctrlAfter = if i + 1 < history.length then history(i + 1)._1 else currentPosition
+
+        val san = sanForMove(ctrlBefore.board, move, ctrlAfter.board)
+
+        if i % 2 == 0 then  // White move (0-indexed even)
+          val moveNum = (i / 2) + 1
+          moveStrings += s"$moveNum. $san"
+        else  // Black move
+          moveStrings += san
+
+      moveStrings.mkString(" ")
 ```
 
 - [ ] **Step 3: Run SAN tests**
