@@ -271,3 +271,19 @@ class GameControllerSpec extends AnyFlatSpec with Matchers:
     afterBlack.board.pieceAt(Square(6, 7)) shouldBe Some(Piece(Color.Black, PieceKind.King))
     afterBlack.board.pieceAt(Square(5, 7)) shouldBe Some(Piece(Color.Black, PieceKind.Rook))
   }
+
+  // ── FEN ───────────────────────────────────────────────────────────────────
+
+  "GameController FEN" should "return current FEN for fen command" in {
+    val (_, msg) = GameController(Board.initial).handleCommand("fen")
+    msg shouldBe "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+  }
+
+  it should "reset to initial position on load command" in {
+    val (afterMove, _) = GameController(Board.initial).handleCommand("e2 e4")
+    val (reset, msg) = afterMove.handleCommand(
+      "load rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    )
+    reset.board shouldBe Board.initial
+    msg shouldBe "Position loaded"
+  }

@@ -9,6 +9,12 @@ object CommandParser:
 
   def parse(input: String): Either[String, ParsedMove] =
     val trimmed = input.trim
+    if trimmed == "fen" then return Right(ParsedMove.FenQuery)
+    if trimmed.startsWith("load ") then
+      val fen = trimmed.stripPrefix("load ").trim
+      if fen.nonEmpty then return Right(ParsedMove.FenLoad(fen))
+      else return Left("Usage: load <fen>")
+    if trimmed == "load" then return Left("Usage: load <fen>")
     if trimmed == "O-O-O" then return Right(ParsedMove.Castling(kingside = false))
     if trimmed == "O-O"   then return Right(ParsedMove.Castling(kingside = true))
 

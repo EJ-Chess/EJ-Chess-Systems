@@ -6,3 +6,5 @@ import de.eljachess.chess.model.{PieceKind, Square}
 enum ParsedMove:
   case Move(from: Square, to: Square, promotion: Option[PieceKind])
   case Castling(kingside: Boolean)
+  case FenQuery
+  case FenLoad(fen: String)

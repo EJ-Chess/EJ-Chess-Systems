@@ -1,7 +1,7 @@
 // core/src/main/scala/de/eljachess/chess/controller/GameController.scala
 package de.eljachess.chess.controller
 
-import de.eljachess.chess.model.{Board, Color, PieceKind, Square}
+import de.eljachess.chess.model.{Board, Color, Fen, PieceKind, Square}
 
 case class GameController(
   board:          Board,
@@ -21,14 +21,20 @@ case class GameController(
 
   def handleCommand(input: String): (GameController, String) =
     CommandParser.parse(input) match
-      case Left(err) => (this, err)
+      case Left(err)                    => (this, err)
+      case Right(ParsedMove.FenQuery)   => (this, Fen.encode(this))
+      case Right(ParsedMove.FenLoad(s)) =>
+        Fen.decode(s) match
+          case Right(newCtrl) => (newCtrl, "Position loaded")
+          case Left(err)      => (this, err)
       case Right(parsed) =>
         val (from, to, promo) = parsed match
-          case ParsedMove.Move(f, t, p) => (f, t, p)
+          case ParsedMove.Move(f, t, p)      => (f, t, p)
           case ParsedMove.Castling(kingside) =>
             val row   = if currentTurn == Color.White then 0 else 7
             val toCol = if kingside then 6 else 2
             (Square(4, row), Square(toCol, row), None)
+          case _ => throw AssertionError("unreachable: FenQuery/FenLoad handled above")
         board.pieceAt(from) match
           case None =>
             (this, s"No piece at ${from.toAlgebraic}")
@@ -37,8 +43,8 @@ case class GameController(
           case Some(_) =>
             val captured = board.pieceAt(to)
             board.move(from, to, promo) match
-              case None                                                    => (this, "Invalid move")
-              case Some(newBoard) if newBoard.isInCheck(currentTurn)      => (this, "Invalid move")
+              case None                                                   => (this, "Invalid move")
+              case Some(newBoard) if newBoard.isInCheck(currentTurn)     => (this, "Invalid move")
               case Some(newBoard) =>
                 val nextTurn    = if currentTurn == Color.White then Color.Black else Color.White
                 val isPawnMove  = board.pieceAt(from).exists(_.kind == PieceKind.Pawn)

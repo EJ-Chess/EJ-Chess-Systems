@@ -153,3 +153,8 @@ class FenSpec extends AnyFlatSpec with Matchers:
     Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") shouldBe
       Right(GameController(Board.initial))
   }
+
+  it should "decode '-' castling field as no castling rights" in {
+    val Right(ctrl) = Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1"): @unchecked
+    ctrl.board.castlingRights shouldBe CastlingRights(false, false, false, false)
+  }

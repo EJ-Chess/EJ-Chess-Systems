@@ -67,3 +67,16 @@ class CommandParserSpec extends AnyFlatSpec with Matchers:
     val Left(msg) = CommandParser.parse("foo"): @unchecked
     msg shouldBe "Invalid command format. Use: <from> <to> (e.g. e2 e4)"
   }
+
+  it should "parse the fen command" in {
+    CommandParser.parse("fen") shouldBe Right(ParsedMove.FenQuery)
+  }
+
+  it should "parse a load command with a full FEN string" in {
+    CommandParser.parse("load rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") shouldBe
+      Right(ParsedMove.FenLoad("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"))
+  }
+
+  it should "return Left for load without argument" in {
+    CommandParser.parse("load") shouldBe Left("Usage: load <fen>")
+  }
