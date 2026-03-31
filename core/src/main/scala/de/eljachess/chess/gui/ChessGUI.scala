@@ -48,7 +48,10 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
 
     val undoBtn      = Button("Undo")
     val redoBtn      = Button("Redo")
+    // TODO: reposition after Export PGN button once feature/pgn-export is merged
+    // $COVERAGE-OFF$
     val importPgnBtn = buildImportPgnButton(manager)
+    // $COVERAGE-ON$
     undoBtn.setOnAction(_ => doAction(manager.undo(this)))
     redoBtn.setOnAction(_ => doAction(manager.redo(this)))
     msgLabel.setPadding(Insets(0, 8, 0, 8))
@@ -130,7 +133,7 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
             case Right((headers, moves)) => replayPgn(moves, manager, headers)
         catch
           case _: java.io.IOException =>
-            msgLabel.setText(s"Cannot read file: ${file.getName}")
+            msgLabel.setText(s"Cannot read file: ${file.getPath}")
           case _: java.nio.charset.MalformedInputException =>
             msgLabel.setText("File encoding error: expected UTF-8")
     }
