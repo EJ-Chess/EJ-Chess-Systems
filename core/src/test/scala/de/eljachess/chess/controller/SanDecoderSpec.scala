@@ -57,7 +57,9 @@ class SanDecoderSpec extends AnyFlatSpec with Matchers:
 
   it should "expand promotion e8=Q" in {
     // FEN: white pawn on e7, black king on f8 (e8 empty), white king on e1
-    val board = Fen.decode("5k2/4P3/8/8/8/8/8/4K3 w - - 0 1").map(_.board).getOrElse(Board.initial)
+    val board = Fen.decode("5k2/4P3/8/8/8/8/8/4K3 w - - 0 1") match
+      case Right(ctrl) => ctrl.board
+      case Left(err)   => fail(s"FEN decode failed: $err")
     SanDecoder.expand(board, Color.White, "e8=Q") match
       case Right((from, to, promo)) =>
         from  shouldBe Square(4, 6)  // e7
@@ -87,14 +89,18 @@ class SanDecoderSpec extends AnyFlatSpec with Matchers:
 
   it should "disambiguate with file when two knights can reach d1" in {
     // Knights on c3 and e3 both can reach d1 — use Ncd1 to pick c-file knight
-    val board = Fen.decode("8/8/8/8/8/2N1N3/8/4K3 w - - 0 1").map(_.board).getOrElse(Board.initial)
+    val board = Fen.decode("8/8/8/8/8/2N1N3/8/4K3 w - - 0 1") match
+      case Right(ctrl) => ctrl.board
+      case Left(err)   => fail(s"FEN decode failed: $err")
     SanDecoder.expand(board, Color.White, "Ncd1") match
       case Right((from, _, _)) => from.toAlgebraic.head shouldBe 'c'
       case Left(err) => fail(s"Expected Right, got: $err")
   }
 
   it should "return Left for ambiguous move without disambiguation" in {
-    val board = Fen.decode("8/8/8/8/8/2N1N3/8/4K3 w - - 0 1").map(_.board).getOrElse(Board.initial)
+    val board = Fen.decode("8/8/8/8/8/2N1N3/8/4K3 w - - 0 1") match
+      case Right(ctrl) => ctrl.board
+      case Left(err)   => fail(s"FEN decode failed: $err")
     SanDecoder.expand(board, Color.White, "Nd1") match
       case Left(msg) => msg.toLowerCase should include("ambiguous")
       case Right(_)  => fail("Expected Left for ambiguous move")
@@ -110,7 +116,9 @@ class SanDecoderSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "expand promotion e8=R to Rook" in {
-    val board = Fen.decode("5k2/4P3/8/8/8/8/8/4K3 w - - 0 1").map(_.board).getOrElse(Board.initial)
+    val board = Fen.decode("5k2/4P3/8/8/8/8/8/4K3 w - - 0 1") match
+      case Right(ctrl) => ctrl.board
+      case Left(err)   => fail(s"FEN decode failed: $err")
     SanDecoder.expand(board, Color.White, "e8=R") match
       case Right((from, to, promo)) =>
         from  shouldBe Square(4, 6)
@@ -121,7 +129,9 @@ class SanDecoderSpec extends AnyFlatSpec with Matchers:
 
   it should "disambiguate with rank when two knights on same file" in {
     // Two knights on b1 and b3, both can go to d2 — pick the one on rank 3 with N3d2
-    val board = Fen.decode("8/8/8/8/8/1n6/8/1n2k3 b - - 0 1").map(_.board).getOrElse(Board.initial)
+    val board = Fen.decode("8/8/8/8/8/1n6/8/1n2k3 b - - 0 1") match
+      case Right(ctrl) => ctrl.board
+      case Left(err)   => fail(s"FEN decode failed: $err")
     SanDecoder.expand(board, Color.Black, "N3d2") match
       case Right((from, _, _)) => from.toAlgebraic.last shouldBe '3'
       case Left(err) => fail(s"Expected Right, got: $err")

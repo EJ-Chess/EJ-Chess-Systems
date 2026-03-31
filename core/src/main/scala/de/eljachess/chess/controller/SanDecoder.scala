@@ -45,19 +45,18 @@ object SanDecoder:
     san: String
   ): Either[String, (Square, Square, Option[PieceKind])] =
     san match
-      case SanPattern(pieceChar, fileHint, rankHint, dest, promoChar) =>
+      case SanPattern(piece, file, rank, dest, promo) =>
         parseSquare(dest) match
-          case None =>
-            Left(s"Invalid destination square: $dest")
+          case None => Left(s"Invalid destination square: $dest")
           case Some(destSquare) =>
-            val candidates = legalCandidates(board, currentColor, destSquare, pieceChar, fileHint, rankHint)
+            val candidates = legalCandidates(board, currentColor, destSquare,
+                                             Option(piece).map(_.head),
+                                             Option(file).map(_.head),
+                                             Option(rank).map(_.head))
             candidates match
-              case Nil =>
-                Left(s"No piece can make move $san")
-              case List((from, _)) =>
-                Right((from, destSquare, parsePromotion(promoChar)))
-              case _ =>
-                Left(s"Move $san is ambiguous")
+              case Nil             => Left(s"No piece can make move $san")
+              case List((from, _)) => Right((from, destSquare, parsePromotion(Option(promo).map(_.head))))
+              case _               => Left(s"Move $san is ambiguous")
       case _ =>
         Left(s"Invalid SAN syntax: $san")
 
@@ -66,43 +65,38 @@ object SanDecoder:
     board: Board,
     currentColor: Color,
     dest: Square,
-    pieceChar: String | Null,
-    fileHint: String | Null,
-    rankHint: String | Null
+    piece: Option[Char],
+    file: Option[Char],
+    rank: Option[Char]
   ): List[(Square, Square)] =
     board.legalMoves(currentColor)
       .filter { case (from, to) =>
-        to == dest &&
-        matchesPiece(board, from, pieceChar) &&
-        Option(fileHint).forall(f => from.toAlgebraic.charAt(0) == f.charAt(0)) &&
-        Option(rankHint).forall(r => from.toAlgebraic.charAt(1) == r.charAt(0))
+        val matchesPiece = piece match
+          case None    => board.pieceAt(from).exists(_.kind == PieceKind.Pawn)
+          case Some(p) => board.pieceAt(from).exists(_.kind == kindFromChar(p))
+        val matchesFile = file.forall(f => from.toAlgebraic(0) == f)
+        val matchesRank = rank.forall(r => from.toAlgebraic(1) == r)
+        to == dest && matchesPiece && matchesFile && matchesRank
       }
 
-  private def matchesPiece(board: Board, from: Square, pieceChar: String | Null): Boolean =
-    board.pieceAt(from).exists { piece =>
-      Option(pieceChar) match
-        case None    => piece.kind == PieceKind.Pawn
-        case Some(p) => piece.kind == kindFromChar(p)
-    }
-
   private def parseSquare(s: String): Option[Square] =
-    Option.when(
-      s != null && s.length == 2 &&
-      s.charAt(0) >= 'a' && s.charAt(0) <= 'h' &&
-      s.charAt(1) >= '1' && s.charAt(1) <= '8'
-    )(Square(s.charAt(0) - 'a', s.charAt(1) - '1'))
+    if s.length == 2 && s(0) >= 'a' && s(0) <= 'h' && s(1) >= '1' && s(1) <= '8'
+    then Some(Square(s(0) - 'a', s(1) - '1'))
+    else None
 
-  private def parsePromotion(p: String): Option[PieceKind] = p match
-    case "Q" => Some(PieceKind.Queen)
-    case "R" => Some(PieceKind.Rook)
-    case "B" => Some(PieceKind.Bishop)
-    case "N" => Some(PieceKind.Knight)
-    case _   => None
+  private def parsePromotion(p: Option[Char]): Option[PieceKind] = p match
+    case Some('Q') => Some(PieceKind.Queen)
+    case Some('R') => Some(PieceKind.Rook)
+    case Some('B') => Some(PieceKind.Bishop)
+    case Some('N') => Some(PieceKind.Knight)
+    case _         => None
 
-  private def kindFromChar(c: String): PieceKind = c match
-    case "N" => PieceKind.Knight
-    case "B" => PieceKind.Bishop
-    case "R" => PieceKind.Rook
-    case "Q" => PieceKind.Queen
-    case "K" => PieceKind.King
-    case _   => PieceKind.Pawn
+  private def kindFromChar(c: Char): PieceKind = c match
+    case 'N' => PieceKind.Knight
+    case 'B' => PieceKind.Bishop
+    case 'R' => PieceKind.Rook
+    case 'Q' => PieceKind.Queen
+    case 'K' => PieceKind.King
+    // $COVERAGE-OFF$ regex only allows NBRQK through to this function
+    case _   => throw new IllegalArgumentException(s"Unknown piece char: $c")
+    // $COVERAGE-ON$
