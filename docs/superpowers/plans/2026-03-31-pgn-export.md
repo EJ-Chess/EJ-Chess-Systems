@@ -123,8 +123,9 @@ object Pgn:
     else
       "*"
 
-  private def buildMoveList(history: List[(GameController, de.eljachess.chess.controller.ParsedMove)]): String =
-    // TODO: implement in Task 2
+  private def buildMoveList(history: List[(GameController, de.eljachess.chess.controller.ParsedMove)],
+                           currentPosition: GameController): String =
+    // Implemented in Task 2, Step 2
     ""
 ```
 
