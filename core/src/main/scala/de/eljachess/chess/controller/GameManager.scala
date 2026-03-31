@@ -4,8 +4,8 @@ import scala.collection.mutable
 
 class GameManager(initial: GameController):
   private var current   = initial
-  private var history   = List.empty[GameController]
-  private var future    = List.empty[GameController]
+  private var history   = List.empty[(GameController, ParsedMove)]
+  private var future    = List.empty[(GameController, ParsedMove)]
   private val observers = mutable.Buffer.empty[Observer]
 
   def addObserver(o: Observer): Unit = synchronized {
@@ -15,12 +15,17 @@ class GameManager(initial: GameController):
 
   def move(input: String, caller: Observer | Null = null): String =
     val (snapshot, ctrl, msg) = synchronized {
+      val parsed = CommandParser.parse(input)
       val (next, msg) = current.handleCommand(input)
       if next != current then
-        history = current :: history
-        future  = Nil
-        current = next
-        (observers.toList.filterNot(_ eq caller), current, msg)
+        parsed match
+          case Right(parsedMove) =>
+            history = (current, parsedMove) :: history
+            future  = Nil
+            current = next
+            (observers.toList.filterNot(_ eq caller), current, msg)
+          case Left(_) =>
+            (Nil, current, msg)
       else
         (Nil, current, msg)
     }
@@ -30,9 +35,10 @@ class GameManager(initial: GameController):
   def undo(caller: Observer | Null = null): String =
     val result = synchronized {
       history match
-        case Nil          => (Nil, current, "Nothing to undo")
-        case prev :: rest =>
-          future  = current :: future
+        case Nil =>
+          (Nil, current, "Nothing to undo")
+        case (prev, move) :: rest =>
+          future  = (current, move) :: future
           history = rest
           current = prev
           (observers.toList.filterNot(_ eq caller), current, "Undo")
@@ -44,9 +50,10 @@ class GameManager(initial: GameController):
   def redo(caller: Observer | Null = null): String =
     val result = synchronized {
       future match
-        case Nil          => (Nil, current, "Nothing to redo")
-        case next :: rest =>
-          history = current :: history
+        case Nil =>
+          (Nil, current, "Nothing to redo")
+        case (next, move) :: rest =>
+          history = (current, move) :: history
           future  = rest
           current = next
           (observers.toList.filterNot(_ eq caller), current, "Redo")
