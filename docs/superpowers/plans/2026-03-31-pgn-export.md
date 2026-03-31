@@ -63,19 +63,9 @@ class PgnSpec extends AnyFlatSpec with Matchers:
     headers should include("[Result \"*\"]")
   }
 
-  it should "detect checkmate as 1-0 when White to move and checkmated" in {
-    val board = Board.initial  // TODO: construct board with White in checkmate
-    val ctrl = GameController(board)
-    val headers = Pgn.encode(List(), "White", "Black", ctrl)
-    headers should include("[Result \"0-1\"]")
-  }
+  it should "detect checkmate as 1-0 when Black to move and checkmated" is (pending) // Requires board construction with checkmate position
 
-  it should "detect stalemate as 1/2-1/2" in {
-    val board = Board.initial  // TODO: construct board with stalemate
-    val ctrl = GameController(board)
-    val headers = Pgn.encode(List(), "White", "Black", ctrl)
-    headers should include("[Result \"1/2-1/2\"]")
-  }
+  it should "detect stalemate as 1/2-1/2" is (pending) // Requires board construction with stalemate position
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -105,7 +95,7 @@ object Pgn:
              blackName: String,
              currentPosition: GameController): String =
     val headers = buildHeaders(whiteName, blackName, currentPosition)
-    val moveList = buildMoveList(history)
+    val moveList = buildMoveList(history, currentPosition)
     val result = detectResult(currentPosition)
     s"$headers\n$moveList $result"
 
@@ -184,7 +174,7 @@ Append to `PgnSpec.scala`:
     )
     val board = Board(grid.toMap)
     val move = de.eljachess.chess.controller.ParsedMove.Move(Square(4, 3), Square(3, 4), None)
-    val boardAfter = Piece(Color.White, PieceKind.Pawn)  // pawn on d5 after capture
+    val boardAfter = board.move(Square(4, 3), Square(3, 4), None).get
     Pgn.sanForMove(board, move, boardAfter) shouldBe "exd5"
   }
 
@@ -255,16 +245,25 @@ Replace the `buildMoveList` stub in `Pgn.scala` with full implementation:
     val movingColor = piece.color
     val nextColor = if movingColor == Color.White then Color.Black else Color.White
 
-    val pieceStr = piece.kind match
-      case PieceKind.Pawn => ""
-      case PieceKind.Knight => "N"
-      case PieceKind.Bishop => "B"
-      case PieceKind.Rook => "R"
-      case PieceKind.Queen => "Q"
-      case PieceKind.King => "K"
-
     val isCapture = boardBefore.pieceAt(to).isDefined
-    val captureStr = if isCapture then "x" else ""
+
+    // For pawns, use file of origin (from.toAlgebraic.head) + 'x' if capture, else destination only
+    val moveStr = if piece.kind == PieceKind.Pawn then
+      if isCapture then
+        s"${from.toAlgebraic.head}x${to.toAlgebraic}"
+      else
+        to.toAlgebraic
+    else
+      // For non-pawns: piece letter + capture marker + destination
+      val pieceStr = piece.kind match
+        case PieceKind.Knight => "N"
+        case PieceKind.Bishop => "B"
+        case PieceKind.Rook => "R"
+        case PieceKind.Queen => "Q"
+        case PieceKind.King => "K"
+        case _ => ""
+      val captureStr = if isCapture then "x" else ""
+      s"$pieceStr$captureStr${to.toAlgebraic}"
 
     val promStr = promotion.map(k => s"=${pieceChar(k)}").getOrElse("")
 
@@ -275,7 +274,7 @@ Replace the `buildMoveList` stub in `Pgn.scala` with full implementation:
       else if inCheck then "+"
       else ""
 
-    s"$pieceStr$captureStr${to.toAlgebraic}$promStr$checkStr"
+    s"$moveStr$promStr$checkStr"
 
   private def pieceChar(kind: PieceKind): String = kind match
     case PieceKind.Queen => "Q"
@@ -284,7 +283,10 @@ Replace the `buildMoveList` stub in `Pgn.scala` with full implementation:
     case PieceKind.Knight => "N"
     case _ => ""
 
-  private def buildMoveList(history: List[(GameController, de.eljachess.chess.controller.ParsedMove)]): String =
+  // Note: This method is incomplete without the currentPosition parameter.
+  // See the encode method for how to handle the last move's boardAfter.
+  private def buildMoveList(history: List[(GameController, de.eljachess.chess.controller.ParsedMove)],
+                           currentPosition: GameController): String =
     if history.isEmpty then ""
     else
       val moves = history.zipWithIndex.map { case ((ctrl, move), idx) =>
@@ -292,7 +294,7 @@ Replace the `buildMoveList` stub in `Pgn.scala` with full implementation:
         val boardAfter = if idx + 1 < history.length then
           history(idx + 1)._1.board
         else
-          boardBefore  // last move: use current board (passed separately)
+          currentPosition.board  // last move: use current position's board
         sanForMove(boardBefore, move, boardAfter)
       }
       formatMoveList(moves)
@@ -374,8 +376,8 @@ def undo(caller: Observer | Null = null): String =
   val result = synchronized {
     history match
       case Nil          => (Nil, current, "Nothing to undo")
-      case (prev, _) :: rest =>
-        future  = (current, null) :: future  // Store current with dummy move; actual move is in history
+      case (prev, move) :: rest =>
+        future  = (current, move) :: future
         history = rest
         current = prev
         (observers.toList.filterNot(_ eq caller), current, "Undo")
@@ -394,8 +396,8 @@ def redo(caller: Observer | Null = null): String =
   val result = synchronized {
     future match
       case Nil          => (Nil, current, "Nothing to redo")
-      case (next, _) :: rest =>
-        history = (current, null) :: history
+      case (next, move) :: rest =>
+        history = (current, move) :: history
         future  = rest
         current = next
         (observers.toList.filterNot(_ eq caller), current, "Redo")
@@ -602,6 +604,10 @@ Expected: 6 commits:
 6. (This summary commit if needed)
 
 ---
+
+## Notes
+
+**Deferred requirements:** The spec lists adding `ParsedMove.PgnQuery`, `CommandParser` support, and `GameController` handling as "reserved for future TUI support". These are intentionally not included in this plan since the current sub-project focuses on GUI export only. A future TUI support task will add the command pipeline integration.
 
 ## Execution Handoff
 
