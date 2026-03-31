@@ -40,13 +40,66 @@ object Pgn:
       case (false, false) => "1/2-1/2"
       case _              => "*"
 
-  private def buildMoveList(history: List[(GameController, ParsedMove)],
-                            currentPosition: GameController): String =
-    // Implemented in Task 2
-    ""
-
   def sanForMove(boardBefore: Board,
                  move: ParsedMove,
-                 boardAfter: Board): String =
-    // Implemented in Task 2
-    ""
+                 boardAfter: Board): String = move match
+    case ParsedMove.Move(from, to, promotion) =>
+      sanForPieceMove(boardBefore, from, to, promotion, boardAfter)
+    case ParsedMove.Castling(kingside) =>
+      if kingside then "O-O" else "O-O-O"
+    case _ =>
+      throw new Exception(s"Non-move command in PGN history: $move")
+
+  private def opposite(color: Color): Color =
+    if color == Color.White then Color.Black else Color.White
+
+  private def sanForPieceMove(boardBefore: Board,
+                              from: Square,
+                              to: Square,
+                              promotion: Option[PieceKind],
+                              boardAfter: Board): String =
+    val piece = boardBefore.pieceAt(from).get
+    val movingColor = piece.color
+    val nextColor = opposite(movingColor)
+    val isCapture = boardBefore.pieceAt(to).isDefined
+    val moveStr = if piece.kind == PieceKind.Pawn then
+      if isCapture then s"${from.toAlgebraic.head}x${to.toAlgebraic}"
+      else to.toAlgebraic
+    else
+      val pieceStr = piece.kind match
+        case PieceKind.Knight => "N"
+        case PieceKind.Bishop => "B"
+        case PieceKind.Rook   => "R"
+        case PieceKind.Queen  => "Q"
+        case PieceKind.King   => "K"
+        case _                => ""
+      val captureStr = if isCapture then "x" else ""
+      s"$pieceStr$captureStr${to.toAlgebraic}"
+    val promStr = promotion.map(k => s"=${pieceChar(k)}").getOrElse("")
+    val checkStr =
+      val inCheck = boardAfter.isInCheck(nextColor)
+      val hasMoves = boardAfter.legalMoves(nextColor).nonEmpty
+      if inCheck && !hasMoves then "#"
+      else if inCheck then "+"
+      else ""
+    s"$moveStr$promStr$checkStr"
+
+  private def pieceChar(kind: PieceKind): String = kind match
+    case PieceKind.Queen  => "Q"
+    case PieceKind.Rook   => "R"
+    case PieceKind.Bishop => "B"
+    case PieceKind.Knight => "N"
+    case _                => ""
+
+  private def buildMoveList(history: List[(GameController, ParsedMove)],
+                            currentPosition: GameController): String =
+    if history.isEmpty then ""
+    else
+      val moveStrings = scala.collection.mutable.ListBuffer.empty[String]
+      for i <- 0 until history.length do
+        val (ctrlBefore, move) = history(i)
+        val ctrlAfter = if i + 1 < history.length then history(i + 1)._1 else currentPosition
+        val san = sanForMove(ctrlBefore.board, move, ctrlAfter.board)
+        if i % 2 == 0 then moveStrings += s"${(i / 2) + 1}. $san"
+        else moveStrings += san
+      moveStrings.mkString(" ")
