@@ -58,7 +58,7 @@ object Pgn:
                               to: Square,
                               promotion: Option[PieceKind],
                               boardAfter: Board): String =
-    val piece = boardBefore.pieceAt(from).get
+    val piece = boardBefore.pieceAt(from).getOrElse(throw new Exception(s"No piece at ${from.toAlgebraic} in PGN history"))
     val movingColor = piece.color
     val nextColor = opposite(movingColor)
     val isCapture = boardBefore.pieceAt(to).isDefined
@@ -73,8 +73,16 @@ object Pgn:
         case PieceKind.Queen  => "Q"
         case PieceKind.King   => "K"
         case _                => ""
+      val otherSquares = boardBefore.legalMoves(movingColor)
+        .collect { case (f, t) if t == to && f != from => f }
+        .filter(f => boardBefore.pieceAt(f).exists(p => p.kind == piece.kind && p.color == movingColor))
+      val disambig = if otherSquares.nonEmpty then
+        val otherFiles = otherSquares.map(_.toAlgebraic.head)
+        if !otherFiles.contains(from.toAlgebraic.head) then from.toAlgebraic.head.toString
+        else from.toAlgebraic.last.toString
+      else ""
       val captureStr = if isCapture then "x" else ""
-      s"$pieceStr$captureStr${to.toAlgebraic}"
+      s"$pieceStr$disambig$captureStr${to.toAlgebraic}"
     val promStr = promotion.map(k => s"=${pieceChar(k)}").getOrElse("")
     val checkStr =
       val inCheck = boardAfter.isInCheck(nextColor)

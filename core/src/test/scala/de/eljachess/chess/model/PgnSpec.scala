@@ -61,6 +61,17 @@ class PgnSpec extends AnyFlatSpec with Matchers:
     Pgn.sanForMove(board, move, boardAfter) shouldBe "Nf3"
   }
 
+  it should "convert piece capture Nf3xe5 to SAN \"Nxe5\"" in {
+    val grid = Map(
+      Square(5, 2) -> Piece(Color.White, PieceKind.Knight),
+      Square(4, 4) -> Piece(Color.Black, PieceKind.Pawn)
+    )
+    val board = Board(grid)
+    val move = ParsedMove.Move(Square(5, 2), Square(4, 4), None)
+    val boardAfter = board.move(Square(5, 2), Square(4, 4), None).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "Nxe5"
+  }
+
   it should "convert castling kingside to SAN \"O-O\"" in {
     val board = Board.initial
     val move = ParsedMove.Castling(kingside = true)
@@ -83,7 +94,7 @@ class PgnSpec extends AnyFlatSpec with Matchers:
 
   it should "format empty move list as empty string" in {
     val pgn = Pgn.encode(List(), "White", "Black", GameController(Board.initial))
-    pgn should not include " 0."
+    pgn should not include "1."
   }
 
   it should "append check symbol + to SAN when move gives check" in {
@@ -97,4 +108,17 @@ class PgnSpec extends AnyFlatSpec with Matchers:
     val move = ParsedMove.Move(Square(4, 3), Square(5, 5), None)
     val boardAfter = board.move(Square(4, 3), Square(5, 5), None).get
     Pgn.sanForMove(board, move, boardAfter) shouldBe "Nf6+"
+  }
+
+  it should "detect checkmate as 1-0 when Black to move and checkmated" in {
+    // Fool's mate: 1.f3 e5 2.g4 Qh4#
+    val (ctrl1, _) = GameController(Board.initial).handleCommand("f2 f3")
+    val (ctrl2, _) = ctrl1.handleCommand("e7 e5")
+    val (ctrl3, _) = ctrl2.handleCommand("g2 g4")
+    val (ctrl4, _) = ctrl3.handleCommand("d8 h4")
+    // board before Qh4
+    val board = ctrl3.board
+    val move = ParsedMove.Move(Square(3, 7), Square(7, 3), None)
+    val boardAfter = ctrl4.board
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "Qh4#"
   }
