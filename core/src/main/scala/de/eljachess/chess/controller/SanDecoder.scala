@@ -47,7 +47,9 @@ object SanDecoder:
     san match
       case SanPattern(piece, file, rank, dest, promo) =>
         parseSquare(dest) match
+          // $COVERAGE-OFF$ regex guarantees dest matches [a-h][1-8], so None is unreachable
           case None => Left(s"Invalid destination square: $dest")
+          // $COVERAGE-ON$
           case Some(destSquare) =>
             val candidates = legalCandidates(board, currentColor, destSquare,
                                              Option(piece).map(_.head),
@@ -82,7 +84,9 @@ object SanDecoder:
   private def parseSquare(s: String): Option[Square] =
     if s.length == 2 && s(0) >= 'a' && s(0) <= 'h' && s(1) >= '1' && s(1) <= '8'
     then Some(Square(s(0) - 'a', s(1) - '1'))
+    // $COVERAGE-OFF$ regex guarantees only valid [a-h][1-8] strings reach parseSquare
     else None
+    // $COVERAGE-ON$
 
   private def parsePromotion(p: Option[Char]): Option[PieceKind] = p match
     case Some('Q') => Some(PieceKind.Queen)

@@ -82,3 +82,20 @@ class PgnSpec extends AnyFlatSpec with Matchers:
         moves shouldBe List("e4", "e5")
       case Left(err) => fail(s"Expected Right, got: $err")
   }
+
+  it should "report only the first error even when multiple bracket lines are malformed" in {
+    // Both lines start with '[' so both land in headerLines — first parse failure propagates through fold
+    val pgnText = "[BadHeader]\n[AlsoBad]\n\ne4 e5"
+    Pgn.decode(pgnText) match
+      case Left(msg) => msg should include("Invalid PGN header")
+      case Right(_)  => fail("Expected Left for malformed headers")
+  }
+
+  it should "propagate the first error past subsequent header lines in the fold" in {
+    // Three bracket-lines: first malformed, second valid, third valid
+    // The (Left(err), _) branch of foldLeft must be exercised for lines 2 and 3
+    val pgnText = "[BadHeader]\n[White \"Alice\"]\n[Black \"Bob\"]\n\ne4"
+    Pgn.decode(pgnText) match
+      case Left(msg) => msg should include("Invalid PGN header")
+      case Right(_)  => fail("Expected Left for first malformed header")
+  }

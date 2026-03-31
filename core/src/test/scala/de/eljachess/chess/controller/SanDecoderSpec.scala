@@ -145,3 +145,84 @@ class SanDecoderSpec extends AnyFlatSpec with Matchers:
       case Left(msg) => msg should not be empty
       case Right(_)  => fail("Expected Left when capture target is empty")
   }
+
+  it should "expand queenside castling O-O-O for White" in {
+    SanDecoder.expand(Board.initial, Color.White, "O-O-O") match
+      case Right((from, to, promo)) =>
+        from shouldBe Square(4, 0)  // e1
+        to   shouldBe Square(2, 0)  // c1
+        promo shouldBe None
+      case Left(err) => fail(s"Expected Right, got: $err")
+  }
+
+  it should "expand promotion e8=B to Bishop" in {
+    val board = Fen.decode("5k2/4P3/8/8/8/8/8/4K3 w - - 0 1") match
+      case Right(ctrl) => ctrl.board
+      case Left(err)   => fail(s"FEN decode failed: $err")
+    SanDecoder.expand(board, Color.White, "e8=B") match
+      case Right((_, _, promo)) => promo shouldBe Some(PieceKind.Bishop)
+      case Left(err) => fail(s"Expected Right, got: $err")
+  }
+
+  it should "expand promotion e8=N to Knight" in {
+    val board = Fen.decode("5k2/4P3/8/8/8/8/8/4K3 w - - 0 1") match
+      case Right(ctrl) => ctrl.board
+      case Left(err)   => fail(s"FEN decode failed: $err")
+    SanDecoder.expand(board, Color.White, "e8=N") match
+      case Right((_, _, promo)) => promo shouldBe Some(PieceKind.Knight)
+      case Left(err) => fail(s"Expected Right, got: $err")
+  }
+
+  it should "expand bishop move Ba4 from open position" in {
+    // Bishop on c2, can move to a4
+    val board = Fen.decode("4k3/8/8/8/8/8/2B5/4K3 w - - 0 1") match
+      case Right(ctrl) => ctrl.board
+      case Left(err)   => fail(s"FEN decode failed: $err")
+    SanDecoder.expand(board, Color.White, "Ba4") match
+      case Right((from, to, _)) =>
+        from shouldBe Square(2, 1)  // c2
+        to   shouldBe Square(0, 3)  // a4
+      case Left(err) => fail(s"Expected Right, got: $err")
+  }
+
+  it should "expand rook move Ra5 from open position" in {
+    // Rook on a1, can move to a5
+    val board = Fen.decode("4k3/8/8/8/8/8/8/R3K3 w - - 0 1") match
+      case Right(ctrl) => ctrl.board
+      case Left(err)   => fail(s"FEN decode failed: $err")
+    SanDecoder.expand(board, Color.White, "Ra5") match
+      case Right((from, to, _)) =>
+        from shouldBe Square(0, 0)  // a1
+        to   shouldBe Square(0, 4)  // a5
+      case Left(err) => fail(s"Expected Right, got: $err")
+  }
+
+  it should "expand queen move Qd3 from open position" in {
+    // Queen on d1, can move to d3
+    val board = Fen.decode("4k3/8/8/8/8/8/8/3QK3 w - - 0 1") match
+      case Right(ctrl) => ctrl.board
+      case Left(err)   => fail(s"FEN decode failed: $err")
+    SanDecoder.expand(board, Color.White, "Qd3") match
+      case Right((from, to, _)) =>
+        from shouldBe Square(3, 0)  // d1
+        to   shouldBe Square(3, 2)  // d3
+      case Left(err) => fail(s"Expected Right, got: $err")
+  }
+
+  it should "expand king move Ke2 from open position" in {
+    // King on e1, can move to e2
+    val board = Fen.decode("4k3/8/8/8/8/8/8/4K3 w - - 0 1") match
+      case Right(ctrl) => ctrl.board
+      case Left(err)   => fail(s"FEN decode failed: $err")
+    SanDecoder.expand(board, Color.White, "Ke2") match
+      case Right((from, to, _)) =>
+        from shouldBe Square(4, 0)  // e1
+        to   shouldBe Square(4, 1)  // e2
+      case Left(err) => fail(s"Expected Right, got: $err")
+  }
+
+  it should "return Left for completely invalid SAN syntax" in {
+    SanDecoder.expand(Board.initial, Color.White, "!!!") match
+      case Left(msg) => msg should include("Invalid SAN syntax")
+      case Right(_)  => fail("Expected Left for invalid SAN")
+  }
