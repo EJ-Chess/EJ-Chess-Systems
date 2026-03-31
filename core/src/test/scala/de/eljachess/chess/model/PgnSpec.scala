@@ -30,9 +30,25 @@ class PgnSpec extends AnyFlatSpec with Matchers:
     pgn should endWith("*")
   }
 
-  it should "detect checkmate as 1-0 when Black to move and checkmated" is (pending)
+  it should "detect checkmate as 1-0 when Black to move and checkmated" in {
+    // Fool's mate: 1.f3 e5 2.g4 Qh4# — White is checkmated, result is 0-1
+    val (ctrl1, _) = GameController(Board.initial).handleCommand("f2 f3")
+    val (ctrl2, _) = ctrl1.handleCommand("e7 e5")
+    val (ctrl3, _) = ctrl2.handleCommand("g2 g4")
+    val (ctrl4, _) = ctrl3.handleCommand("d8 h4")
+    val pgn = Pgn.encode(List(), "White", "Black", ctrl4)
+    pgn should include("[Result \"0-1\"]")
+    pgn should endWith("0-1")
+  }
 
-  it should "detect stalemate as 1/2-1/2" is (pending)
+  it should "detect stalemate as 1/2-1/2" in {
+    // Black king on a8, white queen on b6, white king on h1 — Black is stalemated
+    val fenStr = "k7/8/1Q6/8/8/8/8/7K b - - 0 1"
+    val Right(stalemateCtrl) = Fen.decode(fenStr)
+    val pgn = Pgn.encode(List(), "White", "Black", stalemateCtrl)
+    pgn should include("[Result \"1/2-1/2\"]")
+    pgn should endWith("1/2-1/2")
+  }
 
   // ── SAN generation ─────────────────────────────────────────────────────
 
@@ -52,6 +68,19 @@ class PgnSpec extends AnyFlatSpec with Matchers:
     val move = ParsedMove.Move(Square(4, 3), Square(3, 4), None)
     val boardAfter = board.move(Square(4, 3), Square(3, 4), None).get
     Pgn.sanForMove(board, move, boardAfter) shouldBe "exd5"
+  }
+
+  it should "convert en-passant capture to correct SAN" in {
+    // White pawn on e5, black pawn on d5 — en passant target is d6
+    val grid = Map(
+      Square(4, 4) -> Piece(Color.White, PieceKind.Pawn),
+      Square(3, 4) -> Piece(Color.Black, PieceKind.Pawn)
+    )
+    val castling = CastlingRights(false, false, false, false)
+    val boardWithEP = Board(grid, castling, Some(Square(3, 5)))  // d6 is en-passant target
+    val move = ParsedMove.Move(Square(4, 4), Square(3, 5), None) // e5xd6 e.p.
+    val boardAfter = boardWithEP.move(Square(4, 4), Square(3, 5), None).get
+    Pgn.sanForMove(boardWithEP, move, boardAfter) shouldBe "exd6"
   }
 
   it should "convert knight move g1-f3 to SAN \"Nf3\"" in {

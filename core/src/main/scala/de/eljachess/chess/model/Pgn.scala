@@ -61,7 +61,7 @@ object Pgn:
     val piece = boardBefore.pieceAt(from).getOrElse(throw new Exception(s"No piece at ${from.toAlgebraic} in PGN history"))
     val movingColor = piece.color
     val nextColor = opposite(movingColor)
-    val isCapture = boardBefore.pieceAt(to).isDefined
+    val isCapture = boardBefore.pieceAt(to).isDefined || boardBefore.enPassantTarget.contains(to)
     val moveStr = if piece.kind == PieceKind.Pawn then
       if isCapture then s"${from.toAlgebraic.head}x${to.toAlgebraic}"
       else to.toAlgebraic
@@ -72,7 +72,7 @@ object Pgn:
         case PieceKind.Rook   => "R"
         case PieceKind.Queen  => "Q"
         case PieceKind.King   => "K"
-        case _                => ""
+        case PieceKind.Pawn   => throw new Exception("Pawn move should not reach piece-move handler")
       val otherSquares = boardBefore.legalMoves(movingColor)
         .collect { case (f, t) if t == to && f != from => f }
         .filter(f => boardBefore.pieceAt(f).exists(p => p.kind == piece.kind && p.color == movingColor))
@@ -97,17 +97,14 @@ object Pgn:
     case PieceKind.Rook   => "R"
     case PieceKind.Bishop => "B"
     case PieceKind.Knight => "N"
-    case _                => ""
+    case PieceKind.Pawn | PieceKind.King => throw new Exception(s"Invalid promotion piece: $kind")
 
   private def buildMoveList(history: List[(GameController, ParsedMove)],
                             currentPosition: GameController): String =
     if history.isEmpty then ""
     else
-      val moveStrings = scala.collection.mutable.ListBuffer.empty[String]
-      for i <- 0 until history.length do
-        val (ctrlBefore, move) = history(i)
-        val ctrlAfter = if i + 1 < history.length then history(i + 1)._1 else currentPosition
+      history.zipWithIndex.map { case ((ctrlBefore, move), i) =>
+        val ctrlAfter = if i + 1 < history.size then history(i + 1)._1 else currentPosition
         val san = sanForMove(ctrlBefore.board, move, ctrlAfter.board)
-        if i % 2 == 0 then moveStrings += s"${(i / 2) + 1}. $san"
-        else moveStrings += san
-      moveStrings.mkString(" ")
+        if i % 2 == 0 then s"${(i / 2) + 1}. $san" else san
+      }.mkString(" ")
