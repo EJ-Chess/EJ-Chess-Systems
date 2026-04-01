@@ -47,20 +47,28 @@ object Fen:
 
   // ── Decode ─────────────────────────────────────────────────────────────────
 
-  def decode(fen: String): Either[String, GameController] =
+  /** Decode a FEN string into a [[GameController]].
+    *
+    * Exposed as a curried function value (`String => Either[...]`) so it can
+    * be passed, composed, and partially applied like any other first-class
+    * function — e.g. `val tryDecode = Fen.decode` or
+    * `List(...).map(Fen.decode)`.
+    */
+  val decode: String => Either[String, GameController] = fen =>
     val fields = fen.trim.split("\\s+")
     if fields.length != 6 then
-      return Left(s"Invalid FEN: expected 6 fields, got ${fields.length}")
-    for
-      grid            <- parsePlacement(fields(0))
-      currentTurn     <- parseColor(fields(1))
-      castlingRights  <- parseCastling(fields(2))
-      enPassantTarget <- parseEnPassant(fields(3))
-      halfmoveClock   <- parseHalfmove(fields(4))
-      fullmoveNumber  <- parseFullmove(fields(5))
-    yield
-      val board = Board(grid, castlingRights, enPassantTarget)
-      GameController(board, currentTurn, halfmoveClock, fullmoveNumber)
+      Left(s"Invalid FEN: expected 6 fields, got ${fields.length}")
+    else
+      for
+        grid            <- parsePlacement(fields(0))
+        currentTurn     <- parseColor(fields(1))
+        castlingRights  <- parseCastling(fields(2))
+        enPassantTarget <- parseEnPassant(fields(3))
+        halfmoveClock   <- parseHalfmove(fields(4))
+        fullmoveNumber  <- parseFullmove(fields(5))
+      yield
+        val board = Board(grid, castlingRights, enPassantTarget)
+        GameController(board, currentTurn, halfmoveClock, fullmoveNumber)
 
   private def parsePlacement(s: String): Either[String, Map[Square, Piece]] =
     val ranks = s.split("/", -1)
