@@ -8,7 +8,7 @@ import javafx.scene.Scene
 import javafx.scene.control.{Button, ChoiceDialog, Label, TextInputDialog}
 import javafx.scene.input.{Clipboard, ClipboardContent}
 import scala.jdk.OptionConverters.*
-import javafx.scene.layout.{BorderPane, GridPane, HBox, StackPane}
+import javafx.scene.layout.{BorderPane, GridPane, HBox, StackPane, VBox}
 import javafx.scene.shape.Rectangle
 import javafx.scene.text.{Font, Text}
 import javafx.stage.{FileChooser, Stage}
@@ -22,11 +22,19 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
   private val msgLabel    = Label("")
   private var selected: Option[Square] = None
   private var currentCtrl = manager.state
+  private val overlayPane: VBox =
+    val box = VBox(20.0)
+    box.setAlignment(Pos.CENTER)
+    box.setMaxWidth(Double.MaxValue)
+    box.setMaxHeight(Double.MaxValue)
+    box.setStyle("-fx-background-color: rgba(0,0,0,0.65);")
+    box.setVisible(false)
+    box
 
   private def squareSize: Int =
-    val w = stage.getWidth
-    val h = stage.getHeight
-    if w > 0 && h > 0 then (math.min(w, h - 80) / 8).toInt.max(40)
+    val w = grid.getWidth
+    val h = grid.getHeight
+    if w > 0 && h > 0 then (math.min(w, h) / 8).toInt.max(40)
     else 60
 
   def show(): Unit =
@@ -34,8 +42,8 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
     buildScene()
     redrawBoard(currentCtrl)
     stage.show()
-    stage.widthProperty().addListener((_, _, _) => Platform.runLater(() => redrawBoard(currentCtrl)))
-    stage.heightProperty().addListener((_, _, _) => Platform.runLater(() => redrawBoard(currentCtrl)))
+    grid.widthProperty().addListener((_, _, _) => Platform.runLater(() => redrawBoard(currentCtrl)))
+    grid.heightProperty().addListener((_, _, _) => Platform.runLater(() => redrawBoard(currentCtrl)))
 
   // Called from TUI thread — must dispatch to JavaFX thread via Platform.runLater.
   // Use the `ctrl` parameter as source of truth; do NOT re-read manager.state here.
@@ -53,7 +61,7 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
     statusLabel.setPadding(Insets(8))
     root.setTop(statusLabel)
 
-    root.setCenter(grid)
+    root.setCenter(StackPane(grid, overlayPane))
 
     val undoBtn      = Button("Undo")
     val redoBtn      = Button("Redo")
@@ -65,17 +73,27 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
     val importPgnBtn = buildImportPgnButton(manager)
     val exportPgnBtn = buildExportPgnButton()
 
-    msgLabel.setPadding(Insets(0, 8, 0, 8))
-    val toolbar = HBox(8.0, undoBtn, redoBtn, copyFenBtn, loadFenBtn, importPgnBtn, exportPgnBtn, msgLabel)
-    toolbar.setPadding(Insets(8))
-    toolbar.setAlignment(Pos.CENTER_LEFT)
-    root.setBottom(toolbar)
+    val btnGrid = GridPane()
+    btnGrid.setHgap(6)
+    btnGrid.setVgap(6)
+    btnGrid.add(undoBtn,      0, 0); btnGrid.add(redoBtn,      1, 0)
+    btnGrid.add(copyFenBtn,   0, 1); btnGrid.add(loadFenBtn,   1, 1)
+    btnGrid.add(importPgnBtn, 0, 2); btnGrid.add(exportPgnBtn, 1, 2)
+
+    msgLabel.setPadding(Insets(8, 4, 4, 4))
+    msgLabel.setWrapText(true)
+    msgLabel.setMaxWidth(170)
+
+    val sidebar = VBox(10.0, btnGrid, msgLabel)
+    sidebar.setPadding(Insets(12))
+    sidebar.setAlignment(Pos.TOP_LEFT)
+    root.setRight(sidebar)
 
     stage.setTitle("ElJa Chess")
-    stage.setScene(Scene(root, 480.0, 560.0))
+    stage.setScene(Scene(root, 660.0, 520.0))
     stage.setResizable(true)
-    stage.setMinWidth(8 * 40 + 20)
-    stage.setMinHeight(8 * 40 + 80)
+    stage.setMinWidth(8 * 40 + 190)
+    stage.setMinHeight(8 * 40 + 40)
 
   private def buildCopyFenButton(): Button =
     val btn = Button("Copy FEN")
@@ -154,6 +172,31 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
         val cell = StackPane(rect, label)
         cell.setOnMouseClicked(_ => handleClick(sq))
         grid.add(cell, col, 7 - row)
+    checkGameOver(ctrl)
+
+  private def checkGameOver(ctrl: GameController): Unit =
+    val nextTurn = ctrl.currentTurn
+    if ctrl.board.legalMoves(nextTurn).isEmpty then
+      if ctrl.board.isInCheck(nextTurn) then
+        val winner = if nextTurn == ChessColor.White then "Black" else "White"
+        showGameOver(s"Schachmatt — $winner gewinnt!")
+      else
+        showGameOver("Patt — Unentschieden!")
+    else
+      overlayPane.setVisible(false)
+
+  private def showGameOver(message: String): Unit =
+    overlayPane.getChildren.clear()
+    val title = Label(message)
+    title.setStyle("-fx-font-size: 26px; -fx-font-weight: bold; -fx-text-fill: white;")
+    val newGameBtn = Button("Neues Spiel")
+    newGameBtn.setStyle("-fx-font-size: 14px;")
+    newGameBtn.setOnAction { _ =>
+      overlayPane.setVisible(false)
+      doAction(manager.move("load rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", this))
+    }
+    overlayPane.getChildren.addAll(title, newGameBtn)
+    overlayPane.setVisible(true)
 
   private def handleClick(sq: Square): Unit =
     selected match
@@ -235,6 +278,9 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
             stopped = true
           else
             halfmove += 1
+    selected = None
+    currentCtrl = manager.state
+    redrawBoard(currentCtrl)
     if !stopped then
       val w = headers.getOrElse("White", "White")
       val b = headers.getOrElse("Black", "Black")
