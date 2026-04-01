@@ -1,6 +1,7 @@
 package de.eljachess.chess.controller
 
 import de.eljachess.chess.model.{Board, Color, Piece, PieceKind, Square}
+import de.eljachess.chess.controller.ParsedMove
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -142,4 +143,42 @@ class GameManagerSpec extends AnyFlatSpec with Matchers:
     manager.undo()
     manager.move("d2 d4")
     manager.redo() shouldBe "Nothing to redo"
+  }
+
+  "GameManager.historyHead" should "store the ParsedMove after a move" in {
+    val manager = freshManager
+    manager.move("e2 e4")
+    manager.historyHead should be(defined)
+    manager.historyHead.get._2 shouldBe ParsedMove.Move(Square(4, 1), Square(4, 3), None)
+  }
+
+  it should "be None after undo and restored after redo" in {
+    val manager = freshManager
+    manager.move("e2 e4")
+    manager.undo()
+    manager.historyHead shouldBe None
+    manager.redo()
+    manager.historyHead should be(defined)
+    manager.historyHead.get._2 shouldBe ParsedMove.Move(Square(4, 1), Square(4, 3), None)
+  }
+
+  "GameManager.pgn" should "return PGN with player names and move list" in {
+    val manager = freshManager
+    manager.move("e2 e4")
+    manager.move("e7 e5")
+    val pgn = manager.pgn("Alice", "Bob")
+    pgn should include("[White \"Alice\"]")
+    pgn should include("[Black \"Bob\"]")
+    pgn should include("1. e4 e5")
+  }
+
+  "GameManager.addObserver" should "not notify duplicate observer twice" in {
+    val manager = freshManager
+    val log     = scala.collection.mutable.ListBuffer.empty[String]
+    val obs     = new Observer:
+      def onUpdate(ctrl: GameController, msg: String): Unit = log += msg
+    manager.addObserver(obs)
+    manager.addObserver(obs)
+    manager.move("e2 e4")
+    log.size shouldBe 1
   }

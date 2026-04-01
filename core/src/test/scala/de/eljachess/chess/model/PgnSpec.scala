@@ -9,7 +9,7 @@ import java.time.format.DateTimeFormatter
 
 class PgnSpec extends AnyFlatSpec with Matchers:
 
-  // ── Header generation ─────────────────────────────────────────────────────
+  // ── Headers ───────────────────────────────────────────────────────────────
 
   "Pgn.encode" should "include 7-tag header with provided player names" in {
     val pgn = Pgn.encode(List(), "Alice", "Bob", GameController(Board.initial))
@@ -29,42 +29,43 @@ class PgnSpec extends AnyFlatSpec with Matchers:
   it should "detect in-progress game as result *" in {
     val pgn = Pgn.encode(List(), "White", "Black", GameController(Board.initial))
     pgn should include("[Result \"*\"]")
+    pgn should endWith("*")
   }
 
   it should "detect checkmate as 0-1 when White to move and checkmated" in {
-    // Fool's mate: 1. f3 e5 2. g4 Qh4#
-    val manager = GameManager(GameController(Board.initial))
-    manager.move("f2 f3")
-    manager.move("e7 e5")
-    manager.move("g2 g4")
-    manager.move("d8 h4")
-    val pgn = manager.pgn("White", "Black")
+    // Fool's mate: 1.f3 e5 2.g4 Qh4# — White king is mated
+    val (ctrl1, _) = GameController(Board.initial).handleCommand("f2 f3")
+    val (ctrl2, _) = ctrl1.handleCommand("e7 e5")
+    val (ctrl3, _) = ctrl2.handleCommand("g2 g4")
+    val (ctrl4, _) = ctrl3.handleCommand("d8 h4")
+    val pgn = Pgn.encode(List(), "White", "Black", ctrl4)
     pgn should include("[Result \"0-1\"]")
-    pgn should include("0-1")
-  }
-
-  it should "detect stalemate as 1/2-1/2" in {
-    // Construct a stalemate position: Black king at a8, White queen b6, White king c6
-    val grid = Map(
-      Square(0, 7) -> Piece(Color.Black, PieceKind.King),
-      Square(1, 5) -> Piece(Color.White, PieceKind.Queen),
-      Square(2, 5) -> Piece(Color.White, PieceKind.King)
-    )
-    val staleCtrl = GameController(Board(grid), currentTurn = Color.Black)
-    val pgn       = Pgn.encode(List(), "White", "Black", staleCtrl)
-    pgn should include("[Result \"1/2-1/2\"]")
+    pgn should endWith("0-1")
   }
 
   it should "detect White wins (1-0) when Black to move and checkmated" in {
-    // Black king a8, White queen a1, White king c7 — Black in check, no escape
+    // Black king a8, White queen a1 (check on a-file), White king c7 (blocks escapes)
     val grid = Map(
       Square(0, 7) -> Piece(Color.Black, PieceKind.King),
       Square(0, 0) -> Piece(Color.White, PieceKind.Queen),
       Square(2, 6) -> Piece(Color.White, PieceKind.King)
     )
-    val mateCtrl = GameController(Board(grid), currentTurn = Color.Black)
-    val pgn      = Pgn.encode(List(), "White", "Black", mateCtrl)
+    val ctrl = GameController(Board(grid), currentTurn = Color.Black)
+    val pgn  = Pgn.encode(List(), "White", "Black", ctrl)
     pgn should include("[Result \"1-0\"]")
+    pgn should endWith("1-0")
+  }
+
+  it should "detect stalemate as 1/2-1/2" in {
+    val grid = Map(
+      Square(0, 7) -> Piece(Color.Black, PieceKind.King),
+      Square(1, 5) -> Piece(Color.White, PieceKind.Queen),
+      Square(2, 5) -> Piece(Color.White, PieceKind.King)
+    )
+    val ctrl = GameController(Board(grid), currentTurn = Color.Black)
+    val pgn  = Pgn.encode(List(), "White", "Black", ctrl)
+    pgn should include("[Result \"1/2-1/2\"]")
+    pgn should endWith("1/2-1/2")
   }
 
   it should "not include move numbers for empty history" in {
@@ -83,11 +84,11 @@ class PgnSpec extends AnyFlatSpec with Matchers:
     pgn should include("1. e4 e5 2. Nf3 Nc6")
   }
 
-  // ── SAN generation ────────────────────────────────────────────────────────
+  // ── SAN — pawn moves ──────────────────────────────────────────────────────
 
   "Pgn.sanForMove" should "convert pawn move e2-e4 to \"e4\"" in {
-    val board     = Board.initial
-    val move      = ParsedMove.Move(Square(4, 1), Square(4, 3), None)
+    val board      = Board.initial
+    val move       = ParsedMove.Move(Square(4, 1), Square(4, 3), None)
     val boardAfter = board.move(Square(4, 1), Square(4, 3), None).get
     Pgn.sanForMove(board, move, boardAfter) shouldBe "e4"
   }
@@ -103,6 +104,40 @@ class PgnSpec extends AnyFlatSpec with Matchers:
     Pgn.sanForMove(board, move, boardAfter) shouldBe "exd5"
   }
 
+  it should "convert pawn promotion e7-e8=Q to \"e8=Q\"" in {
+    val grid       = Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn))
+    val board      = Board(grid)
+    val move       = ParsedMove.Move(Square(4, 6), Square(4, 7), Some(PieceKind.Queen))
+    val boardAfter = board.move(Square(4, 6), Square(4, 7), Some(PieceKind.Queen)).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "e8=Q"
+  }
+
+  it should "convert pawn promotion to Rook" in {
+    val grid       = Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn))
+    val board      = Board(grid)
+    val move       = ParsedMove.Move(Square(4, 6), Square(4, 7), Some(PieceKind.Rook))
+    val boardAfter = board.move(Square(4, 6), Square(4, 7), Some(PieceKind.Rook)).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "e8=R"
+  }
+
+  it should "convert pawn promotion to Bishop" in {
+    val grid       = Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn))
+    val board      = Board(grid)
+    val move       = ParsedMove.Move(Square(4, 6), Square(4, 7), Some(PieceKind.Bishop))
+    val boardAfter = board.move(Square(4, 6), Square(4, 7), Some(PieceKind.Bishop)).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "e8=B"
+  }
+
+  it should "convert pawn promotion to Knight" in {
+    val grid       = Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn))
+    val board      = Board(grid)
+    val move       = ParsedMove.Move(Square(4, 6), Square(4, 7), Some(PieceKind.Knight))
+    val boardAfter = board.move(Square(4, 6), Square(4, 7), Some(PieceKind.Knight)).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "e8=N"
+  }
+
+  // ── SAN — piece moves ─────────────────────────────────────────────────────
+
   it should "convert knight move g1-f3 to \"Nf3\"" in {
     val board      = Board.initial
     val move       = ParsedMove.Move(Square(6, 0), Square(5, 2), None)
@@ -110,119 +145,25 @@ class PgnSpec extends AnyFlatSpec with Matchers:
     Pgn.sanForMove(board, move, boardAfter) shouldBe "Nf3"
   }
 
-  it should "convert kingside castling to \"O-O\"" in {
-    Pgn.sanForMove(Board.initial, ParsedMove.Castling(kingside = true), Board.initial) shouldBe "O-O"
-  }
-
-  it should "convert queenside castling to \"O-O-O\"" in {
-    Pgn.sanForMove(Board.initial, ParsedMove.Castling(kingside = false), Board.initial) shouldBe "O-O-O"
-  }
-
-  it should "convert pawn promotion e7-e8=Q to \"e8=Q\"" in {
-    val grid = Map(
-      Square(4, 6) -> Piece(Color.White, PieceKind.Pawn)
-    )
+  it should "convert bishop move c1-f4 to \"Bf4\"" in {
+    val grid       = Map(Square(2, 0) -> Piece(Color.White, PieceKind.Bishop),
+                         Square(7, 7) -> Piece(Color.Black, PieceKind.King))
     val board      = Board(grid)
-    val move       = ParsedMove.Move(Square(4, 6), Square(4, 7), Some(PieceKind.Queen))
-    val boardAfter = board.move(Square(4, 6), Square(4, 7), Some(PieceKind.Queen)).get
-    Pgn.sanForMove(board, move, boardAfter) shouldBe "e8=Q"
+    val move       = ParsedMove.Move(Square(2, 0), Square(5, 3), None)
+    val boardAfter = board.move(Square(2, 0), Square(5, 3), None).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "Bf4"
   }
 
-  it should "append + for moves that give check" in {
-    // White knight on f3 moves to e5, giving check to black king on e8
-    // Simplified: construct a board where Nf3-e5 gives check
-    val grid = Map(
-      Square(5, 2) -> Piece(Color.White, PieceKind.Knight),
-      Square(4, 7) -> Piece(Color.Black, PieceKind.King)
-    )
+  it should "convert king move e1-f2 to \"Kf2\"" in {
+    val grid       = Map(Square(4, 0) -> Piece(Color.White, PieceKind.King),
+                         Square(7, 7) -> Piece(Color.Black, PieceKind.King))
     val board      = Board(grid)
-    val move       = ParsedMove.Move(Square(5, 2), Square(4, 4), None)
-    val boardAfter = board.move(Square(5, 2), Square(4, 4), None).get
-    // Knight on e5 attacks d7,f7,c4,g4,c6,g6,d3,f3 - doesn't check king on e8
-    // Use a simpler check scenario: knight on f7 gives check
-    val grid2 = Map(
-      Square(4, 5) -> Piece(Color.White, PieceKind.Knight),
-      Square(4, 7) -> Piece(Color.Black, PieceKind.King)
-    )
-    val board2      = Board(grid2)
-    val move2       = ParsedMove.Move(Square(4, 5), Square(5, 7), None)
-    val boardAfter2 = board2.move(Square(4, 5), Square(5, 7), None).get
-    // Nf8 - knight on f8 attacks d7, h7, e6, g6 - not king on e8
-    // Let's just verify that non-check moves don't append +
-    Pgn.sanForMove(board, move, boardAfter) should not endWith "+"
+    val move       = ParsedMove.Move(Square(4, 0), Square(5, 1), None)
+    val boardAfter = board.move(Square(4, 0), Square(5, 1), None).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "Kf2"
   }
 
-  it should "append # for moves that give checkmate" in {
-    // Fool's mate: 1. f3 e5 2. g4 Qh4#
-    // Black queen on d8=(3,7) goes to h4=(7,3) — diagonal, 4 squares
-    val manager = GameManager(GameController(Board.initial))
-    manager.move("f2 f3")
-    manager.move("e7 e5")
-    manager.move("g2 g4")
-    val ctrlBefore = manager.state
-    val boardAfter = ctrlBefore.board.move(Square(3, 7), Square(7, 3), None).get
-    val move       = ParsedMove.Move(Square(3, 7), Square(7, 3), None)
-    Pgn.sanForMove(ctrlBefore.board, move, boardAfter) shouldBe "Qh4#"
-  }
-
-  it should "throw for non-move commands in history" in {
-    an[IllegalArgumentException] should be thrownBy {
-      Pgn.sanForMove(Board.initial, ParsedMove.FenQuery, Board.initial)
-    }
-  }
-
-  it should "convert bishop move to SAN \"Be2\"" in {
-    val grid = Map(
-      Square(5, 0) -> Piece(Color.White, PieceKind.Bishop),
-      Square(4, 7) -> Piece(Color.Black, PieceKind.King),
-      Square(0, 0) -> Piece(Color.White, PieceKind.King)
-    )
-    val board      = Board(grid)
-    val move       = ParsedMove.Move(Square(5, 0), Square(4, 1), None)
-    val boardAfter = board.move(Square(5, 0), Square(4, 1), None).get
-    Pgn.sanForMove(board, move, boardAfter) shouldBe "Be2"
-  }
-
-  it should "convert king move to SAN \"Ke2\"" in {
-    val grid = Map(
-      Square(4, 0) -> Piece(Color.White, PieceKind.King),
-      Square(4, 7) -> Piece(Color.Black, PieceKind.King)
-    )
-    val board      = Board(grid)
-    val move       = ParsedMove.Move(Square(4, 0), Square(4, 1), None)
-    val boardAfter = board.move(Square(4, 0), Square(4, 1), None).get
-    Pgn.sanForMove(board, move, boardAfter) shouldBe "Ke2"
-  }
-
-  it should "append + for moves that give check but not checkmate" in {
-    // White rook Re1→e7 gives check to Black king on e8; king can escape
-    val grid = Map(
-      Square(4, 0) -> Piece(Color.White, PieceKind.Rook),
-      Square(4, 7) -> Piece(Color.Black, PieceKind.King),
-      Square(0, 5) -> Piece(Color.White, PieceKind.King)
-    )
-    val board      = Board(grid)
-    val move       = ParsedMove.Move(Square(4, 0), Square(4, 6), None)
-    val boardAfter = board.move(Square(4, 0), Square(4, 6), None).get
-    Pgn.sanForMove(board, move, boardAfter) shouldBe "Re7+"
-  }
-
-  it should "use file disambiguation for pieces on same rank" in {
-    // Rooks on a3 and h3 can both reach e3; disambiguate by file letter 'a'
-    val grid = Map(
-      Square(0, 2) -> Piece(Color.White, PieceKind.Rook),
-      Square(7, 2) -> Piece(Color.White, PieceKind.Rook),
-      Square(0, 7) -> Piece(Color.Black, PieceKind.King),
-      Square(7, 7) -> Piece(Color.White, PieceKind.King)
-    )
-    val board      = Board(grid)
-    val move       = ParsedMove.Move(Square(0, 2), Square(4, 2), None)
-    val boardAfter = board.move(Square(0, 2), Square(4, 2), None).get
-    Pgn.sanForMove(board, move, boardAfter) shouldBe "Rae3"
-  }
-
-  it should "include x notation for non-pawn captures" in {
-    // White knight on g1 captures Black pawn on e2
+  it should "include x for non-pawn capture" in {
     val grid = Map(
       Square(6, 0) -> Piece(Color.White, PieceKind.Knight),
       Square(4, 1) -> Piece(Color.Black, PieceKind.Pawn),
@@ -235,8 +176,83 @@ class PgnSpec extends AnyFlatSpec with Matchers:
     Pgn.sanForMove(board, move, boardAfter) shouldBe "Nxe2"
   }
 
-  it should "use full-square disambiguation when pieces share file and rank with two ambiguous pieces" in {
-    // Queens on a1, d1, a4; moving a1 to d4 — d1 shares rank 0, a4 shares file a
+  // ── SAN — castling ────────────────────────────────────────────────────────
+
+  it should "convert kingside castling to \"O-O\"" in {
+    Pgn.sanForMove(Board.initial, ParsedMove.Castling(kingside = true), Board.initial) shouldBe "O-O"
+  }
+
+  it should "convert queenside castling to \"O-O-O\"" in {
+    Pgn.sanForMove(Board.initial, ParsedMove.Castling(kingside = false), Board.initial) shouldBe "O-O-O"
+  }
+
+  // ── SAN — check / checkmate annotations ──────────────────────────────────
+
+  it should "append + for moves that give check but not checkmate" in {
+    val grid = Map(
+      Square(4, 0) -> Piece(Color.White, PieceKind.Rook),
+      Square(4, 7) -> Piece(Color.Black, PieceKind.King),
+      Square(0, 5) -> Piece(Color.White, PieceKind.King)
+    )
+    val board      = Board(grid)
+    val move       = ParsedMove.Move(Square(4, 0), Square(4, 6), None)
+    val boardAfter = board.move(Square(4, 0), Square(4, 6), None).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "Re7+"
+  }
+
+  it should "append # for moves that give checkmate" in {
+    // Fool's mate — Qd8→h4 (h4 = Square(7,3)) delivers checkmate
+    val manager = GameManager(GameController(Board.initial))
+    manager.move("f2 f3")
+    manager.move("e7 e5")
+    manager.move("g2 g4")
+    val ctrlBefore = manager.state
+    val boardAfter = ctrlBefore.board.move(Square(3, 7), Square(7, 3), None).get
+    val move       = ParsedMove.Move(Square(3, 7), Square(7, 3), None)
+    Pgn.sanForMove(ctrlBefore.board, move, boardAfter) shouldBe "Qh4#"
+  }
+
+  // ── SAN — disambiguation ─────────────────────────────────────────────────
+
+  it should "use file disambiguation for pieces on same rank" in {
+    val grid = Map(
+      Square(0, 2) -> Piece(Color.White, PieceKind.Rook),
+      Square(7, 2) -> Piece(Color.White, PieceKind.Rook),
+      Square(0, 7) -> Piece(Color.Black, PieceKind.King),
+      Square(7, 7) -> Piece(Color.White, PieceKind.King)
+    )
+    val board      = Board(grid)
+    val move       = ParsedMove.Move(Square(0, 2), Square(4, 2), None)
+    val boardAfter = board.move(Square(0, 2), Square(4, 2), None).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "Rae3"
+  }
+
+  it should "use file disambiguation for knights on different files" in {
+    val grid = Map(
+      Square(1, 0) -> Piece(Color.White, PieceKind.Knight),
+      Square(5, 2) -> Piece(Color.White, PieceKind.Knight)
+    )
+    val board      = Board(grid)
+    val move       = ParsedMove.Move(Square(1, 0), Square(3, 1), None)
+    val boardAfter = board.move(Square(1, 0), Square(3, 1), None).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "Nbd2"
+  }
+
+  it should "use rank disambiguation for pieces on same file" in {
+    val grid = Map(
+      Square(3, 0) -> Piece(Color.White, PieceKind.Rook),
+      Square(3, 7) -> Piece(Color.White, PieceKind.Rook),
+      Square(7, 5) -> Piece(Color.Black, PieceKind.King),
+      Square(0, 0) -> Piece(Color.White, PieceKind.King)
+    )
+    val board      = Board(grid)
+    val move       = ParsedMove.Move(Square(3, 0), Square(3, 4), None)
+    val boardAfter = board.move(Square(3, 0), Square(3, 4), None).get
+    Pgn.sanForMove(board, move, boardAfter) shouldBe "R1d5"
+  }
+
+  it should "use full-square disambiguation when pieces share both file and rank" in {
+    // Queens on a1, d1 (same rank), a4 (same file) can all reach d4
     val grid = Map(
       Square(0, 0) -> Piece(Color.White, PieceKind.Queen),
       Square(3, 0) -> Piece(Color.White, PieceKind.Queen),
@@ -250,16 +266,27 @@ class PgnSpec extends AnyFlatSpec with Matchers:
     Pgn.sanForMove(board, move, boardAfter) shouldBe "Qa1d4"
   }
 
-  it should "use rank disambiguation when two same pieces share the same file" in {
-    // Two rooks on d1=(3,0) and d8=(3,7), both can reach d5=(3,4) — disambiguate by rank
-    val grid = Map(
-      Square(3, 0) -> Piece(Color.White, PieceKind.Rook),
-      Square(3, 7) -> Piece(Color.White, PieceKind.Rook),
-      Square(7, 5) -> Piece(Color.Black, PieceKind.King),
-      Square(0, 0) -> Piece(Color.White, PieceKind.King)
-    )
-    val board      = Board(grid)
-    val move       = ParsedMove.Move(Square(3, 0), Square(3, 4), None)
-    val boardAfter = board.move(Square(3, 0), Square(3, 4), None).get
-    Pgn.sanForMove(board, move, boardAfter) shouldBe "R1d5"
+  // ── Exception paths ───────────────────────────────────────────────────────
+
+  it should "throw for non-move commands (FenQuery)" in {
+    an[IllegalArgumentException] should be thrownBy {
+      Pgn.sanForMove(Board.initial, ParsedMove.FenQuery, Board.initial)
+    }
+  }
+
+  it should "throw when the from square has no piece" in {
+    val board = Board(Map.empty, CastlingRights(false, false, false, false), None)
+    val move  = ParsedMove.Move(Square(4, 1), Square(4, 3), None)
+    an[IllegalArgumentException] should be thrownBy {
+      Pgn.sanForMove(board, move, board)
+    }
+  }
+
+  it should "throw for invalid promotion piece (Pawn)" in {
+    val grid  = Map(Square(4, 6) -> Piece(Color.White, PieceKind.Pawn))
+    val board = Board(grid, CastlingRights(false, false, false, false), None)
+    val move  = ParsedMove.Move(Square(4, 6), Square(4, 7), Some(PieceKind.Pawn))
+    an[IllegalArgumentException] should be thrownBy {
+      Pgn.sanForMove(board, move, board)
+    }
   }

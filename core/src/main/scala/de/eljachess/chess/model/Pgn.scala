@@ -7,15 +7,17 @@ import java.time.format.DateTimeFormatter
 
 object Pgn:
 
+  private val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
+
   def encode(history: List[(GameController, ParsedMove)],
              whiteName: String,
              blackName: String,
              currentPosition: GameController): String =
-    val headers  = buildHeaders(whiteName, blackName, currentPosition)
-    val moveList = buildMoveList(history, currentPosition)
     val result   = detectResult(currentPosition)
-    val body     = if moveList.isEmpty then result else s"$moveList $result"
-    s"$headers\n\n$body"
+    val headers  = buildHeaders(whiteName, blackName, result)
+    val moveList = buildMoveList(history, currentPosition)
+    if moveList.isEmpty then s"$headers\n\n$result"
+    else s"$headers\n\n$moveList $result"
 
   def sanForMove(boardBefore: Board,
                  move: ParsedMove,
@@ -29,9 +31,8 @@ object Pgn:
 
   private def buildHeaders(whiteName: String,
                             blackName: String,
-                            currentPosition: GameController): String =
-    val today  = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd"))
-    val result = detectResult(currentPosition)
+                            result: String): String =
+    val today = LocalDate.now().format(formatter)
     s"""[Event "?"]
        |[Site "?"]
        |[Date "$today"]
@@ -44,48 +45,44 @@ object Pgn:
     val nextToMove = ctrl.currentTurn
     val hasMoves   = ctrl.board.legalMoves(nextToMove).nonEmpty
     val inCheck    = ctrl.board.isInCheck(nextToMove)
-    if !hasMoves && inCheck then
-      if nextToMove == Color.White then "0-1" else "1-0"
-    else if !hasMoves then
-      "1/2-1/2"
-    else
-      "*"
+    (hasMoves, inCheck) match
+      case (false, true)  => if nextToMove == Color.White then "0-1" else "1-0"
+      case (false, false) => "1/2-1/2"
+      case _              => "*"
 
   private def buildMoveList(history: List[(GameController, ParsedMove)],
                              currentPosition: GameController): String =
     if history.isEmpty then ""
     else
-      val moveStrings = scala.collection.mutable.ListBuffer.empty[String]
-      for i <- history.indices do
-        val (ctrlBefore, move) = history(i)
-        val ctrlAfter          = if i + 1 < history.length then history(i + 1)._1 else currentPosition
-        val san                = sanForMove(ctrlBefore.board, move, ctrlAfter.board)
-        if i % 2 == 0 then
-          val moveNum = (i / 2) + 1
-          moveStrings += s"$moveNum. $san"
-        else
-          moveStrings += san
-      moveStrings.mkString(" ")
+      history.zipWithIndex.map { case ((ctrlBefore, move), i) =>
+        val ctrlAfter = if i + 1 < history.size then history(i + 1)._1 else currentPosition
+        val san       = sanForMove(ctrlBefore.board, move, ctrlAfter.board)
+        if i % 2 == 0 then s"${(i / 2) + 1}. $san" else san
+      }.mkString(" ")
 
   private def sanForPieceMove(boardBefore: Board,
                                from: Square,
                                to: Square,
                                promotion: Option[PieceKind],
                                boardAfter: Board): String =
-    val piece        = boardBefore.pieceAt(from).get
-    val movingColor  = piece.color
-    val nextColor    = opposite(movingColor)
-    // En passant: pawn moves diagonally to empty square
-    val isPawnCapture = piece.kind == PieceKind.Pawn && from.col != to.col
-    val isCapture     = boardBefore.pieceAt(to).isDefined || isPawnCapture
+    val piece       = boardBefore.pieceAt(from)
+                        .getOrElse(throw new IllegalArgumentException(s"No piece at ${from.toAlgebraic} in PGN history"))
+    val movingColor = piece.color
+    val nextColor   = opposite(movingColor)
+    val isCapture   = boardBefore.pieceAt(to).isDefined || boardBefore.enPassantTarget.contains(to)
 
     val moveStr =
       if piece.kind == PieceKind.Pawn then
-        if isCapture then s"${from.toAlgebraic.head}x${to.toAlgebraic}"
-        else to.toAlgebraic
+        if isCapture then s"${from.toAlgebraic.head}x${to.toAlgebraic}" else to.toAlgebraic
       else
-        val pc = pieceChar(piece.kind)
-        // Disambiguation: other pieces of same kind/color that can also reach `to`
+        val pieceStr = piece.kind match
+          case PieceKind.Knight => "N"
+          case PieceKind.Bishop => "B"
+          case PieceKind.Rook   => "R"
+          case PieceKind.Queen  => "Q"
+          case PieceKind.King   => "K"
+          case PieceKind.Pawn   =>
+            throw new IllegalArgumentException("Pawn reached non-pawn SAN handler")
         val ambiguous = boardBefore.legalMoves(movingColor)
           .filter { case (f, t) =>
             t == to && f != from &&
@@ -97,12 +94,12 @@ object Pgn:
             val sameFile = ambiguous.exists(_._1.col == from.col)
             val sameRank = ambiguous.exists(_._1.row == from.row)
             if !sameFile then from.toAlgebraic.head.toString   // file letter suffices
-            else if !sameRank then (from.row + 1).toString      // rank number suffices
+            else if !sameRank then from.toAlgebraic.last.toString  // rank digit suffices
             else from.toAlgebraic                               // need full square
         val captureStr = if isCapture then "x" else ""
-        s"$pc$disambiguation$captureStr${to.toAlgebraic}"
+        s"$pieceStr$disambiguation$captureStr${to.toAlgebraic}"
 
-    val promStr  = promotion.map(k => s"=${pieceChar(k)}").getOrElse("")
+    val promStr  = promotion.map(k => s"=${promotionChar(k)}").getOrElse("")
     val checkStr =
       val inCheck  = boardAfter.isInCheck(nextColor)
       val hasMoves = boardAfter.legalMoves(nextColor).nonEmpty
@@ -115,10 +112,11 @@ object Pgn:
   private def opposite(color: Color): Color =
     if color == Color.White then Color.Black else Color.White
 
-  private def pieceChar(kind: PieceKind): String = kind match
-    case PieceKind.Knight => "N"
-    case PieceKind.Bishop => "B"
-    case PieceKind.Rook   => "R"
+  // Used only for promotion — Pawn and King are not valid promotion targets
+  private def promotionChar(kind: PieceKind): String = kind match
     case PieceKind.Queen  => "Q"
-    case PieceKind.King   => "K"
-    case _                => "" // $COVERAGE-OFF$ — Pawn is never passed to pieceChar
+    case PieceKind.Rook   => "R"
+    case PieceKind.Bishop => "B"
+    case PieceKind.Knight => "N"
+    case _                =>
+      throw new IllegalArgumentException(s"Invalid promotion piece: $kind")
