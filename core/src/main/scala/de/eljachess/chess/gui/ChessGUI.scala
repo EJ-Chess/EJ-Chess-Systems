@@ -1,7 +1,7 @@
 package de.eljachess.chess.gui
 
-import de.eljachess.chess.controller.{GameController, GameManager, Observer}
-import de.eljachess.chess.model.{Color as ChessColor, Piece, PieceKind, Square}
+import de.eljachess.chess.controller.{GameController, GameManager, Observer, SanDecoder}
+import de.eljachess.chess.model.{Color as ChessColor, Pgn, Piece, PieceKind, Square}
 import javafx.application.Platform
 import javafx.geometry.{Insets, Pos}
 import javafx.scene.Scene
@@ -11,7 +11,7 @@ import scala.jdk.OptionConverters.*
 import javafx.scene.layout.{BorderPane, GridPane, HBox, StackPane}
 import javafx.scene.shape.Rectangle
 import javafx.scene.text.{Font, Text}
-import javafx.stage.Stage
+import javafx.stage.{FileChooser, Stage}
 
 // Excluded from scoverage — JavaFX lifecycle cannot be tested headless.
 // See docs/unresolved.md for details.
@@ -48,17 +48,18 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
 
     root.setCenter(grid)
 
-    val undoBtn = Button("Undo")
-    val redoBtn = Button("Redo")
+    val undoBtn      = Button("Undo")
+    val redoBtn      = Button("Redo")
     undoBtn.setOnAction(_ => doAction(manager.undo(this)))
     redoBtn.setOnAction(_ => doAction(manager.redo(this)))
 
     val copyFenBtn   = buildCopyFenButton()
     val loadFenBtn   = buildLoadFenButton()
+    val importPgnBtn = buildImportPgnButton(manager)
     val exportPgnBtn = buildExportPgnButton()
 
     msgLabel.setPadding(Insets(0, 8, 0, 8))
-    val toolbar = HBox(8.0, undoBtn, redoBtn, copyFenBtn, loadFenBtn, exportPgnBtn, msgLabel)
+    val toolbar = HBox(8.0, undoBtn, redoBtn, copyFenBtn, loadFenBtn, importPgnBtn, exportPgnBtn, msgLabel)
     toolbar.setPadding(Insets(8))
     toolbar.setAlignment(Pos.CENTER_LEFT)
     root.setBottom(toolbar)
@@ -179,6 +180,56 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
           currentCtrl = manager.state
           redrawBoard(currentCtrl)
           msgLabel.setText(msg)
+
+  // $COVERAGE-OFF$
+  private def buildImportPgnButton(manager: GameManager): Button =
+    val button = new Button("Import PGN")
+    button.setOnAction { _ =>
+      val chooser = new FileChooser()
+      chooser.setTitle("Import PGN File")
+      chooser.getExtensionFilters.add(
+        new FileChooser.ExtensionFilter("PGN files (*.pgn)", "*.pgn")
+      )
+      val file = chooser.showOpenDialog(stage)
+      if file != null then
+        try
+          val content = scala.io.Source.fromFile(file, "UTF-8").mkString
+          Pgn.decode(content) match
+            case Left(err)              => msgLabel.setText(s"PGN parse error: $err")
+            case Right((headers, moves)) => replayPgn(moves, manager, headers)
+        catch
+          case _: java.io.IOException =>
+            msgLabel.setText(s"Cannot read file: ${file.getPath}")
+          case _: java.nio.charset.MalformedInputException =>
+            msgLabel.setText("File encoding error: expected UTF-8")
+    }
+    button
+
+  private def replayPgn(moves: List[String], manager: GameManager, headers: Map[String, String]): Unit =
+    var halfmove = 1
+    val iter     = moves.iterator
+    var stopped  = false
+    while iter.hasNext && !stopped do
+      val san  = iter.next()
+      val ctrl = manager.state
+      SanDecoder.expand(ctrl.board, ctrl.currentTurn, san) match
+        case Left(err) =>
+          msgLabel.setText(s"Halfmove $halfmove: $err")
+          stopped = true
+        case Right((from, to, promo)) =>
+          val algebraic = s"${from.toAlgebraic} ${to.toAlgebraic}" +
+            promo.map(k => s" ${k.toString.charAt(0)}").getOrElse("")
+          val msg = manager.move(algebraic, this)
+          if msg.startsWith("Invalid") || msg.startsWith("It's") || msg.startsWith("No piece") then
+            msgLabel.setText(s"Halfmove $halfmove: $msg")
+            stopped = true
+          else
+            halfmove += 1
+    if !stopped then
+      val w = headers.getOrElse("White", "White")
+      val b = headers.getOrElse("Black", "Black")
+      msgLabel.setText(s"PGN imported: $w vs $b")
+  // $COVERAGE-ON$
 
   private def pieceSymbol(piece: Piece): String = piece match
     case Piece(ChessColor.White, PieceKind.King)   => "♔"

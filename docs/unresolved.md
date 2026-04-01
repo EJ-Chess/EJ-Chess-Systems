@@ -37,3 +37,31 @@ out of scope for this feature.
 **Suggested Next Step:**
 Add TestFX as a test dependency and write a headless smoke test that launches
 the application with a mock GameManager to verify board rendering and button callbacks.
+
+## [2026-04-01] PGN Import: promotion replay not tested
+
+**Requirement / Bug:**
+Integration test for pawn promotion (e8=Q) cannot be verified because Board.move in this branch does not support promotion. SanDecoder.expand correctly returns Some(PieceKind.Queen) but the promotion is not applied to the board.
+
+**Root Cause (if known):**
+Promotion support was implemented in feature/pgn-export branch but not yet merged to this branch. Additionally, CommandParser.parse only accepts 2-token commands, so a 3-token "e7 e8 Q" command is rejected before reaching Board.move.
+
+**Attempted Fixes:**
+1. Replaced wrong Pawn-on-e8 assertion with a pending test stub.
+
+**Suggested Next Step:**
+Merge feature/pgn-export into this branch, then update the promotion integration test to assert PieceKind.Queen on e8.
+
+## [2026-04-01] PGN Import: castling replay not tested
+
+**Requirement / Bug:**
+Integration test for O-O (kingside castling) cannot be verified because Board.move in this branch does not support castling. isValidKingMove rejects any king move where the column distance exceeds 1, so a king move from e1 to g1 (distance 2) is always rejected.
+
+**Root Cause (if known):**
+Castling support (two-square king move + rook teleport) has not been implemented in Board.move on this branch.
+
+**Attempted Fixes:**
+1. Added pending test stub "replay O-O and place king on g1 and rook on f1".
+
+**Suggested Next Step:**
+Implement castling in Board.move (detect dc == 2 for King, move king and also relocate the rook), then activate the pending test.

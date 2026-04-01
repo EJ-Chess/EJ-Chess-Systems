@@ -1,6 +1,6 @@
 package de.eljachess.chess.controller
 
-import de.eljachess.chess.model.{Board, Color, Piece, PieceKind, Square}
+import de.eljachess.chess.model.{Board, Color, Piece, PieceKind, Pgn, Square}
 import de.eljachess.chess.controller.ParsedMove
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -181,4 +181,43 @@ class GameManagerSpec extends AnyFlatSpec with Matchers:
     manager.addObserver(obs)
     manager.move("e2 e4")
     log.size shouldBe 1
+  }
+
+  "GameManager PGN replay" should "replay a 2-move game e4 e5 correctly" in {
+    val manager    = new GameManager(GameController(Board.initial))
+    val (_, moves) = Pgn.decode("1. e4 e5").getOrElse((Map.empty, List.empty))
+    moves shouldBe List("e4", "e5")
+    moves.foreach { san =>
+      val ctrl = manager.state
+      SanDecoder.expand(ctrl.board, ctrl.currentTurn, san) match
+        case Left(err)            => fail(s"SAN expansion failed: $err")
+        case Right((from, to, _)) => manager.move(s"${from.toAlgebraic} ${to.toAlgebraic}")
+    }
+    manager.state.board.pieceAt(Square(4, 3)) shouldBe Some(Piece(Color.White, PieceKind.Pawn))
+    manager.state.board.pieceAt(Square(4, 4)) shouldBe Some(Piece(Color.Black, PieceKind.Pawn))
+    manager.state.currentTurn shouldBe Color.White
+  }
+
+  it should "replay promotion and create Queen on e8" is pending
+
+  it should "replay O-O and place king on g1 and rook on f1" is pending
+
+  it should "stop at first illegal SAN move and leave board at last valid position" in {
+    val manager  = new GameManager(GameController(Board.initial))
+    val sanMoves = List("e4", "e5", "Xe6")
+    var stopped  = false
+    var halfmove = 1
+    sanMoves.foreach { san =>
+      if !stopped then
+        val ctrl = manager.state
+        SanDecoder.expand(ctrl.board, ctrl.currentTurn, san) match
+          case Left(_)              => stopped = true
+          case Right((from, to, _)) =>
+            manager.move(s"${from.toAlgebraic} ${to.toAlgebraic}")
+            halfmove += 1
+    }
+    stopped shouldBe true
+    halfmove shouldBe 3
+    manager.state.board.pieceAt(Square(4, 3)) shouldBe Some(Piece(Color.White, PieceKind.Pawn))
+    manager.state.board.pieceAt(Square(4, 4)) shouldBe Some(Piece(Color.Black, PieceKind.Pawn))
   }
