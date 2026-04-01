@@ -17,18 +17,25 @@ import javafx.stage.{FileChooser, Stage}
 // See docs/unresolved.md for details.
 class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
 
-  private val squareSize  = 60
   private val grid        = GridPane()
   private val statusLabel = Label("White's turn")
   private val msgLabel    = Label("")
   private var selected: Option[Square] = None
   private var currentCtrl = manager.state
 
+  private def squareSize: Int =
+    val w = stage.getWidth
+    val h = stage.getHeight
+    if w > 0 && h > 0 then (math.min(w, h - 80) / 8).toInt.max(40)
+    else 60
+
   def show(): Unit =
     manager.addObserver(this)
     buildScene()
     redrawBoard(currentCtrl)
     stage.show()
+    stage.widthProperty().addListener((_, _, _) => Platform.runLater(() => redrawBoard(currentCtrl)))
+    stage.heightProperty().addListener((_, _, _) => Platform.runLater(() => redrawBoard(currentCtrl)))
 
   // Called from TUI thread — must dispatch to JavaFX thread via Platform.runLater.
   // Use the `ctrl` parameter as source of truth; do NOT re-read manager.state here.
@@ -65,8 +72,10 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
     root.setBottom(toolbar)
 
     stage.setTitle("ElJa Chess")
-    stage.setScene(Scene(root, (squareSize * 8).toDouble, (squareSize * 8 + 80).toDouble))
-    stage.setResizable(false)
+    stage.setScene(Scene(root, 480.0, 560.0))
+    stage.setResizable(true)
+    stage.setMinWidth(8 * 40 + 20)
+    stage.setMinHeight(8 * 40 + 80)
 
   private def buildCopyFenButton(): Button =
     val btn = Button("Copy FEN")
@@ -138,9 +147,10 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
         val sq      = Square(col, row)
         val isLight = (col + row) % 2 == 1
         val bg      = HighlightColors.squareColor(sq, selected, legalDests, ctrl.board, isLight)
-        val rect    = Rectangle(squareSize.toDouble, squareSize.toDouble, bg)
+        val sz      = squareSize
+        val rect    = Rectangle(sz.toDouble, sz.toDouble, bg)
         val label   = Text(ctrl.board.pieceAt(sq).map(pieceSymbol).getOrElse(""))
-        label.setFont(Font.font(36))
+        label.setFont(Font.font((sz * 0.6).max(16)))
         val cell = StackPane(rect, label)
         cell.setOnMouseClicked(_ => handleClick(sq))
         grid.add(cell, col, 7 - row)
