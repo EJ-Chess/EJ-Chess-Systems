@@ -47,6 +47,13 @@ object Fen:
 
   // ── Decode ─────────────────────────────────────────────────────────────────
 
+  /** Decode a FEN string into a [[GameController]].
+    *
+    * Exposed as a curried function value (`String => Either[...]`) so it can
+    * be passed, composed, and partially applied like any other first-class
+    * function — e.g. `val tryDecode = Fen.decode` or
+    * `List(...).map(Fen.decode)`.
+    */
   val decode: String => Either[String, GameController] = fen =>
     val fields = fen.trim.split("\\s+")
     if fields.length != 6 then
@@ -63,6 +70,7 @@ object Fen:
         val board = Board(grid, castlingRights, enPassantTarget)
         GameController(board, currentTurn, halfmoveClock, fullmoveNumber)
 
+  // Note: uses List.:+ (O(n) append) over the 64-element board — intentional trade-off for referential transparency
   private def parsePlacement(s: String): Either[String, Map[Square, Piece]] =
     val ranks = s.split("/", -1)
     if ranks.length != 8 then
@@ -103,15 +111,17 @@ object Fen:
     case _   => Left(s"Invalid FEN: invalid active color '$s'")
 
   private def parseCastling(s: String): Either[String, CastlingRights] =
-    if s == "-" then return Right(CastlingRights(false, false, false, false))
-    if s.exists(c => !"KQkq".contains(c)) then
-      return Left(s"Invalid FEN: invalid castling '$s'")
-    Right(CastlingRights(
-      whiteKingside  = s.contains('K'),
-      whiteQueenside = s.contains('Q'),
-      blackKingside  = s.contains('k'),
-      blackQueenside = s.contains('q')
-    ))
+    if s == "-" then
+      Right(CastlingRights(false, false, false, false))
+    else if s.exists(c => !"KQkq".contains(c)) then
+      Left(s"Invalid FEN: invalid castling '$s'")
+    else
+      Right(CastlingRights(
+        whiteKingside  = s.contains('K'),
+        whiteQueenside = s.contains('Q'),
+        blackKingside  = s.contains('k'),
+        blackQueenside = s.contains('q')
+      ))
 
   private def parseEnPassant(s: String): Either[String, Option[Square]] =
     if s == "-" then Right(None)
