@@ -15,18 +15,23 @@ object Fen:
     s"${encodePlacement(board)} $color $castling $ep ${ctrl.halfmoveClock} ${ctrl.fullmoveNumber}"
 
   private def encodePlacement(board: Board): String =
-    (7 to 0 by -1).map { row =>
-      val (rankStr, emptyCount) =
-        (0 to 7).foldLeft(("", 0)) { case ((acc, empty), col) =>
-          board.pieceAt(Square(col, row)) match
-            case None =>
-              (acc, empty + 1)
-            case Some(piece) =>
-              val prefix = if empty > 0 then acc + empty.toString else acc
-              (prefix + pieceChar(piece), 0)
-        }
-      if emptyCount > 0 then rankStr + emptyCount.toString else rankStr
-    }.mkString("/")
+    val sb = new StringBuilder(80)
+    (7 to 0 by -1).foreach { row =>
+      var emptyCount = 0
+      (0 to 7).foreach { col =>
+        board.pieceAt(Square(col, row)) match
+          case None =>
+            emptyCount += 1
+          case Some(piece) =>
+            if emptyCount > 0 then
+              sb.append(emptyCount)
+              emptyCount = 0
+            sb.append(pieceChar(piece))
+      }
+      if emptyCount > 0 then sb.append(emptyCount)
+      if row > 0 then sb.append('/')
+    }
+    sb.toString()
 
   private def pieceChar(piece: Piece): String =
     val c = piece.kind match
@@ -66,7 +71,9 @@ object Fen:
     val ranks = s.split("/", -1)
     if ranks.length != 8 then
       return Left(s"Invalid FEN: expected 8 ranks, got ${ranks.length}")
-    val result = collection.mutable.Map[Square, Piece]()
+
+    val grid = new Array[Option[Piece]](64)
+
     for (rank, rankIdx) <- ranks.zipWithIndex do
       val row = 7 - rankIdx
       var col = 0
@@ -83,13 +90,18 @@ object Fen:
             case 'p' => Some(PieceKind.Pawn)
             case _   => None
           kindOpt match
-            case None    => return Left(s"Invalid FEN: invalid piece char '$ch'")
+            case None => return Left(s"Invalid FEN: invalid piece char '$ch'")
             case Some(k) =>
               val color = if ch.isUpper then Color.White else Color.Black
-              result(Square(col, row)) = Piece(color, k)
+              grid(row * 8 + col) = Some(Piece(color, k))
               col += 1
       if col != 8 then return Left(s"Invalid FEN: rank ${rankIdx + 1} has wrong length")
-    Right(result.toMap)
+
+    Right(
+      (0 until 64)
+        .collect { case idx if grid(idx) != null && grid(idx).nonEmpty => (Square(idx % 8, idx / 8), grid(idx).get) }
+        .toMap
+    )
 
   private def parseColor(s: String): Either[String, Color] = s match
     case "w" => Right(Color.White)
