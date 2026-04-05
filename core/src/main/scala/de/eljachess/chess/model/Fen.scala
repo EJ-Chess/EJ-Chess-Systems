@@ -17,6 +17,7 @@ object Fen:
   private def encodePlacement(board: Board): String =
     val sb = new StringBuilder(80)
     (7 to 0 by -1).foreach { row =>
+      if row < 7 then sb.append('/')
       var emptyCount = 0
       (0 to 7).foreach { col =>
         board.pieceAt(Square(col, row)) match
@@ -29,11 +30,10 @@ object Fen:
             sb.append(pieceChar(piece))
       }
       if emptyCount > 0 then sb.append(emptyCount)
-      if row > 0 then sb.append('/')
     }
     sb.toString()
 
-  private def pieceChar(piece: Piece): String =
+  private def pieceChar(piece: Piece): Char =
     val c = piece.kind match
       case PieceKind.King   => 'K'
       case PieceKind.Queen  => 'Q'
@@ -41,7 +41,7 @@ object Fen:
       case PieceKind.Bishop => 'B'
       case PieceKind.Knight => 'N'
       case PieceKind.Pawn   => 'P'
-    if piece.color == Color.White then c.toString else c.toLower.toString
+    if piece.color == Color.White then c else c.toLower
 
   private def encodeCastling(rights: CastlingRights): String =
     val s = (if rights.whiteKingside  then "K" else "") +
@@ -72,7 +72,7 @@ object Fen:
     if ranks.length != 8 then
       return Left(s"Invalid FEN: expected 8 ranks, got ${ranks.length}")
 
-    val grid = new Array[Option[Piece]](64)
+    val grid = Array.fill(64)(Option.empty[Piece])
 
     for (rank, rankIdx) <- ranks.zipWithIndex do
       val row = 7 - rankIdx
@@ -99,7 +99,7 @@ object Fen:
 
     Right(
       (0 until 64)
-        .collect { case idx if grid(idx) != null && grid(idx).nonEmpty => (Square(idx % 8, idx / 8), grid(idx).get) }
+        .collect { case idx if grid(idx).nonEmpty => (Square(idx % 8, idx / 8), grid(idx).get) }
         .toMap
     )
 
