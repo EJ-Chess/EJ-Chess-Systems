@@ -65,31 +65,36 @@ object Fen:
   private def parsePlacement(s: String): Either[String, Map[Square, Piece]] =
     val ranks = s.split("/", -1)
     if ranks.length != 8 then
-      return Left(s"Invalid FEN: expected 8 ranks, got ${ranks.length}")
-    val result = collection.mutable.Map[Square, Piece]()
-    for (rank, rankIdx) <- ranks.zipWithIndex do
-      val row = 7 - rankIdx
-      var col = 0
-      for ch <- rank do
-        if ch.isDigit then
-          col += ch.asDigit
-        else
-          val kindOpt = ch.toLower match
-            case 'k' => Some(PieceKind.King)
-            case 'q' => Some(PieceKind.Queen)
-            case 'r' => Some(PieceKind.Rook)
-            case 'b' => Some(PieceKind.Bishop)
-            case 'n' => Some(PieceKind.Knight)
-            case 'p' => Some(PieceKind.Pawn)
-            case _   => None
-          kindOpt match
-            case None    => return Left(s"Invalid FEN: invalid piece char '$ch'")
-            case Some(k) =>
-              val color = if ch.isUpper then Color.White else Color.Black
-              result(Square(col, row)) = Piece(color, k)
-              col += 1
-      if col != 8 then return Left(s"Invalid FEN: rank ${rankIdx + 1} has wrong length")
-    Right(result.toMap)
+      Left(s"Invalid FEN: expected 8 ranks, got ${ranks.length}")
+    else
+      ranks.zipWithIndex.foldLeft(Right(List.empty[(Square, Piece)]): Either[String, List[(Square, Piece)]]) { case (acc, (rank, rankIdx)) =>
+        acc.flatMap { pieces =>
+          val row = 7 - rankIdx
+          rank.foldLeft(Right((pieces, 0)): Either[String, (List[(Square, Piece)], Int)]) { case (colAcc, ch) =>
+            colAcc.flatMap { case (ps, col) =>
+              if ch.isDigit then
+                Right((ps, col + ch.asDigit))
+              else
+                val kindOpt = ch.toLower match
+                  case 'k' => Some(PieceKind.King)
+                  case 'q' => Some(PieceKind.Queen)
+                  case 'r' => Some(PieceKind.Rook)
+                  case 'b' => Some(PieceKind.Bishop)
+                  case 'n' => Some(PieceKind.Knight)
+                  case 'p' => Some(PieceKind.Pawn)
+                  case _   => None
+                kindOpt match
+                  case None => Left(s"Invalid FEN: invalid piece char '$ch'")
+                  case Some(k) =>
+                    val color = if ch.isUpper then Color.White else Color.Black
+                    Right((ps :+ (Square(col, row) -> Piece(color, k)), col + 1))
+            }
+          }.flatMap { case (ps, col) =>
+            if col != 8 then Left(s"Invalid FEN: rank ${rankIdx + 1} has wrong length")
+            else Right(ps)
+          }
+        }
+      }.map(_.toMap)
 
   private def parseColor(s: String): Either[String, Color] = s match
     case "w" => Right(Color.White)
