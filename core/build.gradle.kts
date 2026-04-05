@@ -78,3 +78,11 @@ tasks.test {
 tasks.reportScoverage {
     dependsOn(tasks.test)
 }
+
+tasks.register<JavaExec>("benchmark") {
+    group = "verification"
+    description = "Run FEN micro-benchmark"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("de.eljachess.chess.model.fenBenchmark")
+    jvmArgs("-Xss4m", "-Xmx512m")
+}
