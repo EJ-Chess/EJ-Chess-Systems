@@ -163,3 +163,12 @@ class TUISpec extends AnyFlatSpec with Matchers:
     finally
       java.nio.file.Files.deleteIfExists(tmp)
   }
+
+  it should "print error when save-json path is not writable" in {
+    val manager = freshManager
+    // Use a path inside a nonexistent directory — will throw IOException
+    val badPath = "/nonexistent/directory/game.json"
+    val tui = TUI(manager, makeReadLine(s"save-json $badPath"))
+    val out = captureOutput { tui.start() }
+    out should include("Error")
+  }
