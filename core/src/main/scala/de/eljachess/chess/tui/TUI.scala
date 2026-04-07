@@ -36,7 +36,7 @@ class TUI(manager: GameManager, readLine: () => String | Null = () => scala.io.S
               )
               s"Saved to $filename"
             catch
-              case e: Exception => s"Error: ${e.getMessage}"
+              case e: java.io.IOException => s"Error: ${e.getMessage}"
           case s if s.startsWith("load-json ") =>
             val filename = trimmed.drop("load-json ".length).trim
             try
@@ -50,7 +50,7 @@ class TUI(manager: GameManager, readLine: () => String | Null = () => scala.io.S
                   manager.move(s"load ${Fen.encode(ctrl)}", this)
                   s"Loaded from $filename"
             catch
-              case e: Exception => s"Error: ${e.getMessage}"
+              case e: java.io.IOException => s"Error: ${e.getMessage}"
           case _ => manager.move(trimmed, this)
         println(msg)
       loop() // always recurse while input is non-null; empty lines skip the move

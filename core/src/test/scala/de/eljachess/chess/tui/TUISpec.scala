@@ -127,3 +127,39 @@ class TUISpec extends AnyFlatSpec with Matchers:
     val out = captureOutput { tui.start() }
     out should include("Error")
   }
+
+  it should "print 'Saved to' message after save-json" in {
+    val tmp = java.nio.file.Files.createTempFile("chess-msg", ".json")
+    try
+      val manager = freshManager
+      val tui = TUI(manager, makeReadLine(s"save-json ${tmp.toString}"))
+      val out = captureOutput { tui.start() }
+      out should include("Saved to")
+    finally
+      java.nio.file.Files.deleteIfExists(tmp)
+  }
+
+  it should "print 'Loaded from' message after load-json" in {
+    val json = Json.encode(GameController(Board.initial))
+    val tmp = java.nio.file.Files.createTempFile("chess-msg", ".json")
+    try
+      java.nio.file.Files.write(tmp, json.getBytes("UTF-8"))
+      val manager = freshManager
+      val tui = TUI(manager, makeReadLine(s"load-json ${tmp.toString}"))
+      val out = captureOutput { tui.start() }
+      out should include("Loaded from")
+    finally
+      java.nio.file.Files.deleteIfExists(tmp)
+  }
+
+  it should "print JSON error message when JSON file is malformed" in {
+    val tmp = java.nio.file.Files.createTempFile("chess-bad", ".json")
+    try
+      java.nio.file.Files.write(tmp, """{"notfen":"invalid"}""".getBytes("UTF-8"))
+      val manager = freshManager
+      val tui = TUI(manager, makeReadLine(s"load-json ${tmp.toString}"))
+      val out = captureOutput { tui.start() }
+      out should include("JSON error")
+    finally
+      java.nio.file.Files.deleteIfExists(tmp)
+  }
