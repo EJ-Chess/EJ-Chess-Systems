@@ -1,7 +1,7 @@
 package de.eljachess.chess.gui
 
 import de.eljachess.chess.controller.{GameController, GameManager, Observer, SanDecoder}
-import de.eljachess.chess.model.{Color as ChessColor, Pgn, Piece, PieceKind, Square}
+import de.eljachess.chess.model.{Color as ChessColor, Fen, Json, Pgn, Piece, PieceKind, Square}
 import javafx.application.Platform
 import javafx.geometry.{Insets, Pos}
 import javafx.scene.Scene
@@ -70,15 +70,18 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
 
     val copyFenBtn   = buildCopyFenButton()
     val loadFenBtn   = buildLoadFenButton()
-    val importPgnBtn = buildImportPgnButton(manager)
-    val exportPgnBtn = buildExportPgnButton()
+    val importPgnBtn  = buildImportPgnButton(manager)
+    val exportPgnBtn  = buildExportPgnButton()
+    val importJsonBtn = buildImportJsonButton(manager)
+    val exportJsonBtn = buildExportJsonButton()
 
     val btnGrid = GridPane()
     btnGrid.setHgap(6)
     btnGrid.setVgap(6)
-    btnGrid.add(undoBtn,      0, 0); btnGrid.add(redoBtn,      1, 0)
-    btnGrid.add(copyFenBtn,   0, 1); btnGrid.add(loadFenBtn,   1, 1)
-    btnGrid.add(importPgnBtn, 0, 2); btnGrid.add(exportPgnBtn, 1, 2)
+    btnGrid.add(undoBtn,       0, 0); btnGrid.add(redoBtn,       1, 0)
+    btnGrid.add(copyFenBtn,    0, 1); btnGrid.add(loadFenBtn,    1, 1)
+    btnGrid.add(importPgnBtn,  0, 2); btnGrid.add(exportPgnBtn,  1, 2)
+    btnGrid.add(importJsonBtn, 0, 3); btnGrid.add(exportJsonBtn, 1, 3)
 
     msgLabel.setPadding(Insets(8, 4, 4, 4))
     msgLabel.setWrapText(true)
@@ -233,6 +236,69 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
           currentCtrl = manager.state
           redrawBoard(currentCtrl)
           msgLabel.setText(msg)
+
+  // $COVERAGE-OFF$
+  private def buildExportJsonButton(): Button =
+    val btn = Button("Export JSON")
+    btn.setOnAction { _ =>
+      val dialog = new TextInputDialog()
+      dialog.setTitle("Spieler eingeben")
+      dialog.setHeaderText("Spielernamen für JSON")
+      dialog.setContentText("Weiß, Schwarz (kommagetrennt):")
+      dialog.showAndWait().toScala match
+        case Some(input) if input.nonEmpty =>
+          val names = input.split(",").map(_.trim)
+          if names.length == 2 then
+            try
+              val json = Json.encode(manager.state, names(0), names(1))
+              val chooser = new FileChooser()
+              chooser.setTitle("Export JSON File")
+              chooser.getExtensionFilters.add(
+                new FileChooser.ExtensionFilter("JSON files (*.json)", "*.json")
+              )
+              val file = chooser.showSaveDialog(stage)
+              if file != null then
+                java.nio.file.Files.write(
+                  java.nio.file.Paths.get(file.getAbsolutePath),
+                  json.getBytes("UTF-8")
+                )
+                msgLabel.setText("JSON exported")
+            catch
+              case e: java.io.IOException => msgLabel.setText(s"JSON error: ${e.getMessage}")
+          else
+            msgLabel.setText("Format: White, Black")
+        case _ => ()
+    }
+    btn
+
+  private def buildImportJsonButton(manager: GameManager): Button =
+    val button = new Button("Import JSON")
+    button.setOnAction { _ =>
+      val chooser = new FileChooser()
+      chooser.setTitle("Import JSON File")
+      chooser.getExtensionFilters.add(
+        new FileChooser.ExtensionFilter("JSON files (*.json)", "*.json")
+      )
+      val file = chooser.showOpenDialog(stage)
+      if file != null then
+        try
+          val content = java.nio.file.Files.readString(
+            java.nio.file.Paths.get(file.getAbsolutePath),
+            java.nio.charset.StandardCharsets.UTF_8
+          )
+          Json.decode(content) match
+            case Left(err) => msgLabel.setText(s"JSON error: $err")
+            case Right(ctrl) =>
+              manager.move(s"load ${Fen.encode(ctrl)}", this)
+              selected = None
+              currentCtrl = manager.state
+              redrawBoard(currentCtrl)
+              msgLabel.setText("Position loaded")
+        catch
+          case e: java.io.IOException => msgLabel.setText(s"JSON error: ${e.getMessage}")
+    }
+    button
+  // $COVERAGE-ON$
 
   // $COVERAGE-OFF$
   private def buildImportPgnButton(manager: GameManager): Button =
