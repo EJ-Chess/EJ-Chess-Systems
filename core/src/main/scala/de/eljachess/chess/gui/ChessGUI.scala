@@ -264,7 +264,7 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
                 )
                 msgLabel.setText("JSON exported")
             catch
-              case e: java.io.IOException => msgLabel.setText(s"JSON error: ${e.getMessage}")
+              case e: Exception => msgLabel.setText(s"JSON error: ${e.getMessage}")
           else
             msgLabel.setText("Format: White, Black")
         case _ => ()
@@ -295,7 +295,7 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
               redrawBoard(currentCtrl)
               msgLabel.setText("Position loaded")
         catch
-          case e: java.io.IOException => msgLabel.setText(s"JSON error: ${e.getMessage}")
+          case e: Exception => msgLabel.setText(s"JSON error: ${e.getMessage}")
     }
     button
   // $COVERAGE-ON$
