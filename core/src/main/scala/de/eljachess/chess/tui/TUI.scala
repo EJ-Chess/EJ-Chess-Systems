@@ -46,7 +46,9 @@ class TUI(manager: GameManager, readLine: () => String | Null = () => scala.io.S
               )
               Json.decode(content) match
                 case Left(err)   => s"JSON error: $err"
-                case Right(ctrl) => manager.move(s"load ${Fen.encode(ctrl)}", this)
+                case Right(ctrl) =>
+                  manager.move(s"load ${Fen.encode(ctrl)}", this)
+                  s"Loaded from $filename"
             catch
               case e: Exception => s"Error: ${e.getMessage}"
           case _ => manager.move(trimmed, this)
