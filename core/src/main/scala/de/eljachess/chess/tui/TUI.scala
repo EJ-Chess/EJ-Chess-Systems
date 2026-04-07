@@ -1,6 +1,7 @@
 package de.eljachess.chess.tui
 
 import de.eljachess.chess.controller.{GameController, GameManager, Observer}
+import de.eljachess.chess.model.{Fen, Json}
 import scala.annotation.tailrec
 
 class TUI(manager: GameManager, readLine: () => String | Null = () => scala.io.StdIn.readLine())
@@ -26,6 +27,28 @@ class TUI(manager: GameManager, readLine: () => String | Null = () => scala.io.S
         val msg = trimmed.toLowerCase match
           case "undo" => manager.undo(this)
           case "redo" => manager.redo(this)
-          case _      => manager.move(trimmed, this)
+          case s if s.startsWith("save-json ") =>
+            val filename = trimmed.drop("save-json ".length).trim
+            try
+              java.nio.file.Files.write(
+                java.nio.file.Paths.get(filename),
+                Json.encode(manager.state).getBytes("UTF-8")
+              )
+              s"Saved to $filename"
+            catch
+              case e: Exception => s"Error: ${e.getMessage}"
+          case s if s.startsWith("load-json ") =>
+            val filename = trimmed.drop("load-json ".length).trim
+            try
+              val content = java.nio.file.Files.readString(
+                java.nio.file.Paths.get(filename),
+                java.nio.charset.StandardCharsets.UTF_8
+              )
+              Json.decode(content) match
+                case Left(err)   => s"JSON error: $err"
+                case Right(ctrl) => manager.move(s"load ${Fen.encode(ctrl)}", this)
+            catch
+              case e: Exception => s"Error: ${e.getMessage}"
+          case _ => manager.move(trimmed, this)
         println(msg)
       loop() // always recurse while input is non-null; empty lines skip the move

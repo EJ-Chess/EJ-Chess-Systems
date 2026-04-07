@@ -1,7 +1,7 @@
 package de.eljachess.chess.tui
 
 import de.eljachess.chess.controller.{GameController, GameManager, Observer}
-import de.eljachess.chess.model.{Board, Color, Piece, PieceKind, Square}
+import de.eljachess.chess.model.{Board, Color, Json, Piece, PieceKind, Square}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import java.io.{ByteArrayOutputStream, PrintStream}
@@ -93,4 +93,37 @@ class TUISpec extends AnyFlatSpec with Matchers:
     val tui = TUI(manager, makeReadLine())  // immediately returns null
     captureOutput { tui.start() }           // must not hang
     succeed
+  }
+
+  it should "save game to JSON with save-json <filename> command" in {
+    val manager = freshManager
+    manager.move("e2 e4")
+    val tmp = java.nio.file.Files.createTempFile("chess-test", ".json")
+    try
+      val tui = TUI(manager, makeReadLine(s"save-json ${tmp.toString}"))
+      captureOutput { tui.start() }
+      java.nio.file.Files.size(tmp) should be > 0L
+    finally
+      java.nio.file.Files.deleteIfExists(tmp)
+  }
+
+  it should "load game from JSON with load-json <filename> command" in {
+    val json = Json.encode(GameController(Board.initial))
+    val tmp = java.nio.file.Files.createTempFile("chess-load", ".json")
+    try
+      java.nio.file.Files.write(tmp, json.getBytes("UTF-8"))
+      val manager = freshManager
+      manager.move("e2 e4")
+      val tui = TUI(manager, makeReadLine(s"load-json ${tmp.toString}"))
+      captureOutput { tui.start() }
+      manager.state.board shouldBe Board.initial
+    finally
+      java.nio.file.Files.deleteIfExists(tmp)
+  }
+
+  it should "print error on load-json with missing file" in {
+    val manager = freshManager
+    val tui = TUI(manager, makeReadLine("load-json /this/does/not/exist.json"))
+    val out = captureOutput { tui.start() }
+    out should include("Error")
   }
