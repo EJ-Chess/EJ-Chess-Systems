@@ -70,3 +70,10 @@ class JsonSpec extends AnyFlatSpec with Matchers:
       case Right(ctrl) => ctrl.board.pieceAt(Square(0, 7)) shouldBe Some(Piece(Color.Black, PieceKind.Rook))
       case Left(err)   => fail(err)
   }
+
+  it should "round-trip: decode(encode(ctrl)) returns the same controller" in {
+    val ctrl = GameController(Board.initial)
+    Json.decode(Json.encode(ctrl)) match
+      case Right(decoded) => decoded shouldBe ctrl
+      case Left(err)      => fail(s"Round-trip failed: $err")
+  }
