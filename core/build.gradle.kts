@@ -54,6 +54,8 @@ dependencies {
         }
     }
 
+    implementation("com.lihaoyi:fastparse_3:3.0.0")
+
     implementation("org.scalafx:scalafx_3:${versions["SCALAFX"]!!}")
     listOf("javafx-base", "javafx-controls", "javafx-graphics").forEach { module ->
         implementation("org.openjfx:$module:${versions["JAVAFX"]!!}:win")
@@ -83,6 +85,6 @@ tasks.register<JavaExec>("benchmark") {
     group = "verification"
     description = "Run FEN micro-benchmark"
     classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("de.eljachess.chess.model.fenBenchmark")
+    mainClass.set("de.eljachess.chess.model.FenBenchmark")
     jvmArgs("-Xss4m", "-Xmx512m")
 }
