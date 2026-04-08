@@ -158,3 +158,52 @@ class FenSpec extends AnyFlatSpec with Matchers:
     val Right(ctrl) = Fen.decode("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1"): @unchecked
     ctrl.board.castlingRights shouldBe CastlingRights(false, false, false, false)
   }
+
+  // ── ParserCombinatorsFEN.parsePlacement ───────────────────────────────────
+
+  "ParserCombinatorsFEN.parsePlacement" should "parse initial position" in {
+    val placement = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+    val Right(expected) = Fen.decode(s"$placement w KQkq - 0 1"): @unchecked
+    val result = ParserCombinatorsFEN.parsePlacement(placement)
+    result shouldBe Right(expected.board.grid)
+  }
+
+  it should "parse empty board (all 8s)" in {
+    val result = ParserCombinatorsFEN.parsePlacement("8/8/8/8/8/8/8/8")
+    result shouldBe Right(Map())
+  }
+
+  it should "parse mixed rank with pieces and empty squares" in {
+    val result = ParserCombinatorsFEN.parsePlacement("r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R")
+    result.isRight should be(true)
+    result.getOrElse(Map()).size should be >= 24
+  }
+
+  it should "reject placement with wrong rank count" in {
+    val result = ParserCombinatorsFEN.parsePlacement("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP")
+    result.isLeft should be(true)
+  }
+
+  it should "reject rank with invalid characters by throwing RuntimeException" in {
+    // cats.parse propagates sys.error from map when partial parse succeeds but col != 8
+    a [RuntimeException] should be thrownBy {
+      ParserCombinatorsFEN.parsePlacement("rnbqkbnr/pppppppp/8/8/8/8/PPPPXPPP/RNBQKBNR")
+    }
+  }
+
+  it should "reject rank containing digit 9 (out of range)" in {
+    // '9' is not matched by digitParser (only '1'..'8'), so the parser fails → Left
+    val result = ParserCombinatorsFEN.parsePlacement("rnbqkbnr/pppppppp/9/8/8/8/PPPPPPPP/RNBQKBNR")
+    result.isLeft should be(true)
+  }
+
+  it should "parse rank 4 mid-game position" in {
+    val result = ParserCombinatorsFEN.parsePlacement("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8")
+    result.isRight should be(true)
+  }
+
+  it should "parse position with all piece types and return 32 pieces" in {
+    val result = ParserCombinatorsFEN.parsePlacement("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR")
+    result.isRight should be(true)
+    result.getOrElse(Map()).size shouldBe 32
+  }
