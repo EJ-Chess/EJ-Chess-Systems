@@ -42,6 +42,14 @@ object FenBenchmark:
     }
 
     println()
+    println("=== ParserCombinatorsFEN (Approach F) ===")
+    println()
+
+    bench("decode batch (5 FENs) - ParserCombinatorsFEN", warmup = 5_000, iters = 50_000) {
+      testFens.foreach(ParserCombinatorsFEN.parsePlacement)
+    }
+
+    println()
     println("Done.")
 
   @main def fenBenchmark(): Unit = run()
