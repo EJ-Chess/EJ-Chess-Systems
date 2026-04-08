@@ -59,6 +59,8 @@ dependencies {
         implementation("org.openjfx:$module:${versions["JAVAFX"]!!}:win")
     }
 
+    implementation("org.typelevel:cats-parse_3:1.0.0")
+
     testImplementation(platform("org.junit:junit-bom:${versions["JUNIT_BOM"]!!}"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
