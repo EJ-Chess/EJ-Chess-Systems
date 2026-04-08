@@ -45,3 +45,6 @@ object FenBenchmark:
     println("Done.")
 
   @main def fenBenchmark(): Unit = run()
+
+  // Explicit main method for JavaExec compatibility
+  def main(args: Array[String]): Unit = run()
