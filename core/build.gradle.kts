@@ -85,6 +85,6 @@ tasks.register<JavaExec>("benchmark") {
     group = "verification"
     description = "Run FEN micro-benchmark"
     classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("de.eljachess.chess.model.fenBenchmark")
+    mainClass.set("de.eljachess.chess.model.FenBenchmark")
     jvmArgs("-Xss4m", "-Xmx512m")
 }
