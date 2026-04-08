@@ -59,21 +59,26 @@ object ParserCombinatorsFEN:
    * Validates that the column count reaches exactly 8.
    */
   private val rankParser: Parser[List[(Int, Color, PieceKind)]] =
-    rankTokenParser.rep.map { tokens =>
+    rankTokenParser.rep.flatMap { tokens =>
       val pieces = mutable.ListBuffer[(Int, Color, PieceKind)]()
       var col = 0
-      for token <- tokens.toList do
+      var exceeded = false
+      for token <- tokens.toList if !exceeded do
         token match
           case Left(emptyCount) =>
             col += emptyCount
           case Right((color, kind)) =>
             if col >= 8 then
-              sys.error(s"Rank exceeds 8 squares (col=$col)")
-            pieces += ((col, color, kind))
-            col += 1
-      if col != 8 then
-        sys.error(s"Rank has $col squares, expected 8")
-      pieces.toList
+              exceeded = true
+            else
+              pieces += ((col, color, kind))
+              col += 1
+      if exceeded then
+        Parser.failWith(s"Rank exceeds 8 squares")
+      else if col != 8 then
+        Parser.failWith(s"Rank has $col squares, expected 8")
+      else
+        Parser.pure(pieces.toList)
     }
 
   /**

@@ -184,11 +184,9 @@ class FenSpec extends AnyFlatSpec with Matchers:
     result.isLeft should be(true)
   }
 
-  it should "reject rank with invalid characters by throwing RuntimeException" in {
-    // cats.parse propagates sys.error from map when partial parse succeeds but col != 8
-    a [RuntimeException] should be thrownBy {
-      ParserCombinatorsFEN.parsePlacement("rnbqkbnr/pppppppp/8/8/8/8/PPPPXPPP/RNBQKBNR")
-    }
+  it should "reject rank with invalid characters returning Left" in {
+    val result = ParserCombinatorsFEN.parsePlacement("rnbqkbnr/pppppppp/8/8/8/8/PPPPXPPP/RNBQKBNR")
+    result.isLeft should be(true)
   }
 
   it should "reject rank containing digit 9 (out of range)" in {
