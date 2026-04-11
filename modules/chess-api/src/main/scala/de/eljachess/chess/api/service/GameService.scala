@@ -39,9 +39,9 @@ class GameService:
           case Some(_) =>
             val promoSuffix = promotion
               .flatMap(p => parsePromotion(p))
-              .map(k => s"=${pieceKindToChar(k)}")
+              .map(k => s" ${pieceKindToChar(k)}")
               .getOrElse("")
-            val command = s"$from$to$promoSuffix"
+            val command = s"$from $to$promoSuffix"
             val result  = manager.move(command)
             if result.startsWith("Invalid") || result.startsWith("No piece") || result.startsWith("It's") then
               Left(result)
@@ -55,8 +55,8 @@ class GameService:
       case Left(err) =>
         Left(err)
       case Right((from, to, promo)) =>
-        val promoSuffix = promo.map(k => s"=${pieceKindToChar(k)}").getOrElse("")
-        val command     = s"${from.toAlgebraic}${to.toAlgebraic}$promoSuffix"
+        val promoSuffix = promo.map(k => s" ${pieceKindToChar(k)}").getOrElse("")
+        val command     = s"${from.toAlgebraic} ${to.toAlgebraic}$promoSuffix"
         val result      = manager.move(command)
         if result.startsWith("Invalid") || result.startsWith("No piece") || result.startsWith("It's") then
           Left(result)
@@ -76,8 +76,8 @@ class GameService:
             case Left(err) =>
               Some(s"Failed to parse SAN '$san': $err")
             case Right((from, to, promo)) =>
-              val promoSuffix = promo.map(k => s"=${pieceKindToChar(k)}").getOrElse("")
-              val command     = s"${from.toAlgebraic}${to.toAlgebraic}$promoSuffix"
+              val promoSuffix = promo.map(k => s" ${pieceKindToChar(k)}").getOrElse("")
+              val command     = s"${from.toAlgebraic} ${to.toAlgebraic}$promoSuffix"
               val result      = newManager.move(command)
               if result.startsWith("Invalid") || result.startsWith("No piece") || result.startsWith("It's") then
                 Some(s"Move '$san' failed: $result")

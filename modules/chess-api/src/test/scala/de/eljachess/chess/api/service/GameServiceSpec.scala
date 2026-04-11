@@ -5,14 +5,6 @@ import org.scalatest.matchers.should.Matchers
 import de.eljachess.chess.api.dto.GameStateResponse
 import de.eljachess.chess.api.exception.GameNotFoundException
 
-// NOTE: GameService.makeMoveAlgebraic and makeMoveSan both contain a known bug:
-// the command is built as s"$from$to" (no space) but CommandParser expects
-// space-separated tokens ("e2 e4"). As a result, all move commands produce
-// "Invalid command format" and the methods always return Left for any move input.
-// This is documented in docs/unresolved.md.
-// Tests in this file reflect the actual (buggy) runtime behaviour so the suite
-// stays green while the bug is tracked.
-
 class GameServiceSpec extends AnyFlatSpec with Matchers:
 
   // ── createGame ──────────────────────────────────────────────────────────────
@@ -84,25 +76,29 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     val svc   = GameService()
     val id    = svc.createGame()
     val state = svc.getGameState(id).toOption.get
-    // Standard starting position prefix
     state.fen should startWith("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w")
   }
 
-  // NOTE: "reflect correct turn after a move" is omitted because
-  // makeMoveAlgebraic always returns Left due to the command-format bug
-  // (see top-of-file note). The turn therefore never changes.
+  it should "reflect BLACK turn after White's first algebraic move" in {
+    val svc = GameService()
+    val id  = svc.createGame()
+    svc.makeMoveAlgebraic(id, "e2", "e4", None).isRight should be(true)
+    svc.getGameState(id).toOption.get.currentTurn should be("BLACK")
+  }
 
   // ── makeMoveAlgebraic ────────────────────────────────────────────────────────
 
-  // Due to the command-format bug, makeMoveAlgebraic always produces a command
-  // like "e2e4" (no space) which CommandParser rejects as "Invalid command format".
-  // Therefore ALL move attempts – legal or not – return Left.
-
-  "GameService.makeMoveAlgebraic" should "return Left for any move due to command-format bug" in {
+  "GameService.makeMoveAlgebraic" should "return Right for a legal opening move" in {
     val svc = GameService()
     val id  = svc.createGame()
-    // Even a perfectly legal opening move fails because the command is mis-formatted
-    svc.makeMoveAlgebraic(id, "e2", "e4", None).isLeft should be(true)
+    svc.makeMoveAlgebraic(id, "e2", "e4", None).isRight should be(true)
+  }
+
+  it should "advance the turn from WHITE to BLACK after a legal move" in {
+    val svc = GameService()
+    val id  = svc.createGame()
+    svc.makeMoveAlgebraic(id, "d2", "d4", None)
+    svc.getGameState(id).toOption.get.currentTurn should be("BLACK")
   }
 
   it should "return Left for an illegal move" in {
@@ -133,27 +129,31 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
   it should "return Left when attempting to move an opponent's piece" in {
     val svc = GameService()
     val id  = svc.createGame()
-    // Moves e7→e5: also fails due to command-format bug (Left regardless)
+    // It's White's turn; e7 is a Black pawn
     svc.makeMoveAlgebraic(id, "e7", "e5", None).isLeft should be(true)
   }
 
-  it should "return Left for a promotion move due to command-format bug" in {
+  it should "return Right for a promotion move and promote to queen" in {
     val svc = GameService()
     val id  = svc.createGame()
     val fenBeforePromo = "8/P7/8/8/8/8/8/4K2k w - - 0 1"
     svc.importFen(id, fenBeforePromo)
-    // a7→a8=Q fails because command is built as "a7a8=Q" (no space before "=Q")
-    svc.makeMoveAlgebraic(id, "a7", "a8", Some("Q")).isLeft should be(true)
+    svc.makeMoveAlgebraic(id, "a7", "a8", Some("Q")).isRight should be(true)
   }
 
   // ── makeMoveSan ──────────────────────────────────────────────────────────────
 
-  // Same root bug: the command built from SanDecoder output also omits the space.
-
-  "GameService.makeMoveSan" should "return Left for any valid SAN move due to command-format bug" in {
+  "GameService.makeMoveSan" should "return Right for a valid SAN move" in {
     val svc = GameService()
     val id  = svc.createGame()
-    svc.makeMoveSan(id, "e4").isLeft should be(true)
+    svc.makeMoveSan(id, "e4").isRight should be(true)
+  }
+
+  it should "advance the turn after a SAN move" in {
+    val svc = GameService()
+    val id  = svc.createGame()
+    svc.makeMoveSan(id, "e4")
+    svc.getGameState(id).toOption.get.currentTurn should be("BLACK")
   }
 
   it should "return Left for an invalid SAN move" in {
@@ -169,10 +169,10 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     }
   }
 
-  it should "return Left for a knight SAN move due to command-format bug" in {
+  it should "return Right for a knight SAN move" in {
     val svc = GameService()
     val id  = svc.createGame()
-    svc.makeMoveSan(id, "Nf3").isLeft should be(true)
+    svc.makeMoveSan(id, "Nf3").isRight should be(true)
   }
 
   // ── getLegalMoves ─────────────────────────────────────────────────────────────
@@ -257,16 +257,20 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
 
   // ── importPgn ────────────────────────────────────────────────────────────────
 
-  "GameService.importPgn" should "reject PGN with unknown SAN moves and return Left due to SanDecoder" in {
-    // SanDecoder.expand can decode "e4" fine, but the move application in
-    // importPgn uses the same buggy command (no space) and the GameManager
-    // rejects it with "Invalid command format", so importPgn returns Left.
+  "GameService.importPgn" should "return Right for a valid PGN with standard moves" in {
     val svc = GameService()
     val id  = svc.createGame()
     val pgn = "[White \"A\"]\n[Black \"B\"]\n\n1. e4 e5 2. Nf3 Nc6 *"
-    // importPgn returns Left because moves fail with "Invalid command format"
-    val result = svc.importPgn(id, pgn)
-    result.isLeft should be(true)
+    svc.importPgn(id, pgn).isRight should be(true)
+  }
+
+  it should "update game state after successful PGN import" in {
+    val svc = GameService()
+    val id  = svc.createGame()
+    val pgn = "[White \"A\"]\n[Black \"B\"]\n\n1. e4 e5 *"
+    svc.importPgn(id, pgn)
+    val state = svc.getGameState(id).toOption.get
+    state.fullmoveNumber should be(2)
   }
 
   it should "throw GameNotFoundException for unknown game" in {
@@ -316,11 +320,27 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "return Right with a FEN after a successful move and undo" in {
+    val svc = GameService()
+    val id  = svc.createGame()
+    svc.makeMoveAlgebraic(id, "e2", "e4", None)
+    val result = svc.undo(id)
+    result.isRight should be(true)
+    result.toOption.get should startWith("rnbqkbnr/pppppppp")
+  }
+
+  it should "restore WHITE turn after undoing White's first move" in {
+    val svc = GameService()
+    val id  = svc.createGame()
+    svc.makeMoveAlgebraic(id, "e2", "e4", None)
+    svc.undo(id)
+    svc.getGameState(id).toOption.get.currentTurn should be("WHITE")
+  }
+
   it should "still return Left after a failed move attempt (nothing recorded in history)" in {
     val svc = GameService()
     val id  = svc.createGame()
-    // All move attempts fail due to command-format bug, so history stays empty
-    svc.makeMoveAlgebraic(id, "e2", "e4", None) // returns Left, not recorded
+    svc.makeMoveAlgebraic(id, "e2", "e5", None) // illegal move, returns Left
     svc.undo(id).isLeft should be(true)
   }
 
@@ -339,10 +359,28 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "return Right after move then undo then redo" in {
+    val svc = GameService()
+    val id  = svc.createGame()
+    svc.makeMoveAlgebraic(id, "e2", "e4", None)
+    svc.undo(id)
+    val result = svc.redo(id)
+    result.isRight should be(true)
+  }
+
+  it should "restore BLACK turn after redo of White's first move" in {
+    val svc = GameService()
+    val id  = svc.createGame()
+    svc.makeMoveAlgebraic(id, "e2", "e4", None)
+    svc.undo(id)
+    svc.redo(id)
+    svc.getGameState(id).toOption.get.currentTurn should be("BLACK")
+  }
+
   it should "return Left after a failed move then redo" in {
     val svc = GameService()
     val id  = svc.createGame()
-    // No moves were successfully made, so redo has nothing
+    // No successful moves, so redo has nothing
     svc.redo(id).isLeft should be(true)
   }
 
@@ -410,12 +448,11 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     }
   }
 
-  it should "return a PGN with empty move list when no moves have been made" in {
+  it should "include move notation after a move is made" in {
     val svc = GameService()
     val id  = svc.createGame()
-    // No moves were made (all fail due to bug), so move list should be minimal
+    svc.makeMoveAlgebraic(id, "e2", "e4", None)
     val pgn = svc.getPgn(id).toOption.get
-    // PGN should still be well-formed with headers
     pgn should include("[White")
     pgn should include("[Black")
   }
