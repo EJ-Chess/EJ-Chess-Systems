@@ -34,10 +34,15 @@ dependencies {
 
     // Testing
     testImplementation("io.quarkus:quarkus-junit5:${versions["QUARKUS"]!!}")
-    testImplementation("io.quarkus:quarkus-test-client:${versions["QUARKUS"]!!}")
     testImplementation("org.scalatest:scalatest_3:${versions["SCALATEST"]!!}")
+    testImplementation("co.helmethair:scalatest-junit-runner:${versions["SCALATEST_JUNIT"]!!}")
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        includeEngines("scalatest")
+        testLogging {
+            events("passed", "skipped", "failed")
+        }
+    }
 }
