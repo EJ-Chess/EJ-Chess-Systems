@@ -34,13 +34,16 @@ dependencies {
 
     // Testing
     testImplementation("io.quarkus:quarkus-junit5:${versions["QUARKUS"]!!}")
+    testImplementation("io.rest-assured:rest-assured:5.4.0") {
+        exclude(group = "org.scala-lang", module = "scala-library")
+    }
     testImplementation("org.scalatest:scalatest_3:${versions["SCALATEST"]!!}")
     testImplementation("co.helmethair:scalatest-junit-runner:${versions["SCALATEST_JUNIT"]!!}")
 }
 
 tasks.test {
     useJUnitPlatform {
-        includeEngines("scalatest")
+        includeEngines("scalatest", "junit-jupiter")
         testLogging {
             events("passed", "skipped", "failed")
         }
