@@ -145,6 +145,10 @@ class GameService:
     }
     Right(moves)
 
+  def getPgn(gameId: String): Either[String, String] =
+    val manager = getGameOrThrow(gameId)
+    Right(manager.pgn("White", "Black"))
+
   def deleteGame(gameId: String): Either[String, Unit] =
     getGameOrThrow(gameId)
     games.remove(gameId)
