@@ -1,7 +1,13 @@
+plugins {
+    id("io.quarkus") version "3.8.0" apply false
+    kotlin("jvm") version "2.1.0" apply false
+}
+
 group = "org.example"
 version = "1.0-SNAPSHOT"
 
 val versions = mapOf(
+    "QUARKUS"               to "3.8.0",
     "QUARKUS_SCALA3"        to "1.0.0",
     "SCALA3"                to "3.5.1",
     "SCALA_LIBRARY"         to "2.13.18",
