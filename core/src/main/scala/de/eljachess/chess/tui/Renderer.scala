@@ -24,15 +24,15 @@ object Renderer:
     (turnLine +: rows :+ s"   $labels").mkString("\n")
 
   private def symbol(piece: Piece): Char = piece match
-    case Piece(Color.White, PieceKind.King)   => '\u2654' // ♔
-    case Piece(Color.White, PieceKind.Queen)  => '\u2655' // ♕
-    case Piece(Color.White, PieceKind.Rook)   => '\u2656' // ♖
-    case Piece(Color.White, PieceKind.Bishop) => '\u2657' // ♗
-    case Piece(Color.White, PieceKind.Knight) => '\u2658' // ♘
-    case Piece(Color.White, PieceKind.Pawn)   => '\u2659' // ♙
-    case Piece(Color.Black, PieceKind.King)   => '\u265A' // ♚
-    case Piece(Color.Black, PieceKind.Queen)  => '\u265B' // ♛
-    case Piece(Color.Black, PieceKind.Rook)   => '\u265C' // ♜
-    case Piece(Color.Black, PieceKind.Bishop) => '\u265D' // ♝
-    case Piece(Color.Black, PieceKind.Knight) => '\u265E' // ♞
-    case Piece(Color.Black, PieceKind.Pawn)   => '\u265F' // ♟
+    case Piece(Color.White, PieceKind.King)   => 'K'
+    case Piece(Color.White, PieceKind.Queen)  => 'Q'
+    case Piece(Color.White, PieceKind.Rook)   => 'R'
+    case Piece(Color.White, PieceKind.Bishop) => 'B'
+    case Piece(Color.White, PieceKind.Knight) => 'N'
+    case Piece(Color.White, PieceKind.Pawn)   => 'P'
+    case Piece(Color.Black, PieceKind.King)   => 'k'
+    case Piece(Color.Black, PieceKind.Queen)  => 'q'
+    case Piece(Color.Black, PieceKind.Rook)   => 'r'
+    case Piece(Color.Black, PieceKind.Bishop) => 'b'
+    case Piece(Color.Black, PieceKind.Knight) => 'n'
+    case Piece(Color.Black, PieceKind.Pawn)   => 'p'

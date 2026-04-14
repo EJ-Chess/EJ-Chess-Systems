@@ -5,10 +5,9 @@ import javafx.application.Application
 import javafx.stage.Stage
 
 object ChessApp:
-  // Written by the main thread before Application.launch — @volatile ensures
-  // the JavaFX Application Thread sees the assignment without a data race.
   @volatile var manager: GameManager = _
+  @volatile var lookupManager: String => Either[String, GameManager] = _ => Left("No lookup")
 
 class ChessApp extends Application:
   override def start(stage: Stage): Unit =
-    ChessGUI(ChessApp.manager, stage).show()
+    ChessGUI(ChessApp.manager, stage, ChessApp.lookupManager).show()

@@ -12,6 +12,9 @@ class GameManager(initial: GameController):
   def addObserver(o: Observer): Unit = synchronized {
     if !observers.contains(o) then observers += o
   }
+  def removeObserver(o: Observer): Unit = synchronized {
+    observers -= o
+  }
   def state: GameController = synchronized { current }
 
   def move(input: String, caller: Observer | Null = null): String =

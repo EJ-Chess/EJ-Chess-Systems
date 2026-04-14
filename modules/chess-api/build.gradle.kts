@@ -1,4 +1,5 @@
 plugins {
+    id("io.quarkus")
     kotlin("jvm")
     scala
 }
@@ -15,6 +16,8 @@ scala {
 }
 
 dependencies {
+    implementation(enforcedPlatform("io.quarkus.platform:quarkus-bom:${versions["QUARKUS"]!!}"))
+
     // Scala 3 runtime
     implementation("org.scala-lang:scala3-library_3") {
         version { strictly(versions["SCALA3"]!!) }
@@ -23,12 +26,24 @@ dependencies {
     // Core: import chess domain from core module
     implementation(project(":core"))
 
-    // Quarkus REST (quarkus-rest / quarkus-rest-jackson only available from 3.9.0+;
-    //              for Quarkus 3.8.x use the resteasy-reactive equivalents)
-    implementation("io.quarkus:quarkus-resteasy-reactive:${versions["QUARKUS"]!!}") {
+    // JavaFX / ScalaFX (for local GUI startup)
+    implementation("org.scalafx:scalafx_3:${versions["SCALAFX"]!!}") {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
-    implementation("io.quarkus:quarkus-resteasy-reactive-jackson:${versions["QUARKUS"]!!}") {
+    listOf("javafx-base", "javafx-controls", "javafx-graphics").forEach { module ->
+        implementation("org.openjfx:$module:${versions["JAVAFX"]!!}:win")
+    }
+
+    // Jackson Scala module (Option, Seq, Map support)
+    implementation("com.fasterxml.jackson.module:jackson-module-scala_3:2.18.3") {
+        exclude(group = "org.scala-lang", module = "scala-library")
+    }
+
+    // Quarkus REST
+    implementation("io.quarkus:quarkus-rest:${versions["QUARKUS"]!!}") {
+        exclude(group = "org.scala-lang", module = "scala-library")
+    }
+    implementation("io.quarkus:quarkus-rest-jackson:${versions["QUARKUS"]!!}") {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
 
@@ -48,8 +63,7 @@ tasks.test {
             events("passed", "skipped", "failed")
         }
     }
-    // GameControllerSpec uses @QuarkusTest which requires the io.quarkus Gradle plugin.
-    // That plugin is incompatible with Gradle 9.2.0 (see docs/unresolved.md).
-    // Exclude it from default test run until Quarkus is upgraded to 3.25+.
+    // @QuarkusTest classes must run via ./gradlew :modules:chess-api:quarkusTest
+    // Running them through the standard test task crashes the worker process.
     exclude("**/controller/**")
 }

@@ -149,6 +149,9 @@ class GameService:
     val manager = getGameOrThrow(gameId)
     Right(manager.pgn("White", "Black"))
 
+  def getManager(gameId: String): Either[String, GameManager] =
+    games.get(gameId).toRight(s"Game not found: $gameId")
+
   def deleteGame(gameId: String): Either[String, Unit] =
     getGameOrThrow(gameId)
     games.remove(gameId)

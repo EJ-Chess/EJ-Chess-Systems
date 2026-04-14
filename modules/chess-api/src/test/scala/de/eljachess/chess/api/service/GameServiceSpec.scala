@@ -456,3 +456,24 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     pgn should include("[White")
     pgn should include("[Black")
   }
+
+  // ── getManager ───────────────────────────────────────────────────────────────
+
+  "GameService.getManager" should "return Right(GameManager) for a known game" in {
+    val svc = GameService()
+    val id  = svc.createGame()
+    svc.getManager(id).isRight should be(true)
+  }
+
+  it should "return Left for an unknown game" in {
+    val svc = GameService()
+    svc.getManager("no-such-id").isLeft should be(true)
+  }
+
+  it should "return a manager that reflects moves made via the service" in {
+    val svc = GameService()
+    val id  = svc.createGame()
+    svc.makeMoveAlgebraic(id, "e2", "e4", None)
+    val manager = svc.getManager(id).toOption.get
+    manager.state.board.pieceAt(de.eljachess.chess.model.Square(4, 3)) should not be empty
+  }

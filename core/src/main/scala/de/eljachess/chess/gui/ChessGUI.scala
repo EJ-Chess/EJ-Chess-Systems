@@ -5,7 +5,7 @@ import de.eljachess.chess.model.{Color as ChessColor, Fen, Json, Pgn, Piece, Pie
 import javafx.application.Platform
 import javafx.geometry.{Insets, Pos}
 import javafx.scene.Scene
-import javafx.scene.control.{Button, ChoiceDialog, Label, TextInputDialog}
+import javafx.scene.control.{Button, ChoiceDialog, Label, Menu, MenuBar, MenuItem, TextInputDialog}
 import javafx.scene.input.{Clipboard, ClipboardContent}
 import scala.jdk.OptionConverters.*
 import javafx.scene.layout.{BorderPane, GridPane, HBox, StackPane, VBox}
@@ -15,7 +15,11 @@ import javafx.stage.{FileChooser, Stage}
 
 // Excluded from scoverage — JavaFX lifecycle cannot be tested headless.
 // See docs/unresolved.md for details.
-class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
+class ChessGUI(
+  private var manager: GameManager,
+  stage: Stage,
+  lookupManager: String => Either[String, GameManager] = _ => Left("No lookup")
+) extends Observer:
 
   private val grid        = GridPane()
   private val statusLabel = Label("White's turn")
@@ -59,7 +63,8 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
 
     statusLabel.setFont(Font.font(16))
     statusLabel.setPadding(Insets(8))
-    root.setTop(statusLabel)
+    val topBox = VBox(buildMenuBar(), statusLabel)
+    root.setTop(topBox)
 
     root.setCenter(StackPane(grid, overlayPane))
 
@@ -70,9 +75,9 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
 
     val copyFenBtn   = buildCopyFenButton()
     val loadFenBtn   = buildLoadFenButton()
-    val importPgnBtn  = buildImportPgnButton(manager)
+    val importPgnBtn  = buildImportPgnButton()
     val exportPgnBtn  = buildExportPgnButton()
-    val importJsonBtn = buildImportJsonButton(manager)
+    val importJsonBtn = buildImportJsonButton()
     val exportJsonBtn = buildExportJsonButton()
 
     val btnGrid = GridPane()
@@ -97,6 +102,38 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
     stage.setResizable(true)
     stage.setMinWidth(8 * 40 + 190)
     stage.setMinHeight(8 * 40 + 40)
+
+  private def buildMenuBar(): MenuBar =
+    val switchItem = MenuItem("Open Game...")
+    switchItem.setOnAction(_ => handleSwitchGame())
+    val gameMenu = Menu("Game")
+    gameMenu.getItems.add(switchItem)
+    val menuBar = MenuBar()
+    menuBar.getMenus.add(gameMenu)
+    menuBar
+
+  private def handleSwitchGame(): Unit =
+    val dialog = new TextInputDialog()
+    dialog.setTitle("Open Game")
+    dialog.setHeaderText("Game ID eingeben")
+    dialog.setContentText("Game ID:")
+    dialog.showAndWait().toScala match
+      case None => ()
+      case Some(gameId) if gameId.isBlank => ()
+      case Some(gameId) =>
+        lookupManager(gameId) match
+          case Left(err) =>
+            msgLabel.setText(s"Game not found: $err")
+          case Right(newManager) =>
+            manager.removeObserver(this)
+            manager = newManager
+            manager.addObserver(this)
+            selected    = None
+            currentCtrl = manager.state
+            Platform.runLater(() =>
+              redrawBoard(currentCtrl)
+              msgLabel.setText(s"Switched to game")
+            )
 
   private def buildCopyFenButton(): Button =
     val btn = Button("Copy FEN")
@@ -271,7 +308,7 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
     }
     btn
 
-  private def buildImportJsonButton(manager: GameManager): Button =
+  private def buildImportJsonButton(): Button =
     val button = new Button("Import JSON")
     button.setOnAction { _ =>
       val chooser = new FileChooser()
@@ -301,7 +338,7 @@ class ChessGUI(manager: GameManager, stage: Stage) extends Observer:
   // $COVERAGE-ON$
 
   // $COVERAGE-OFF$
-  private def buildImportPgnButton(manager: GameManager): Button =
+  private def buildImportPgnButton(): Button =
     val button = new Button("Import PGN")
     button.setOnAction { _ =>
       val chooser = new FileChooser()
