@@ -3,7 +3,7 @@ package de.eljachess.chess.api.service
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import de.eljachess.chess.api.dto.GameStateResponse
-import de.eljachess.chess.api.exception.GameNotFoundException
+
 
 class GameServiceSpec extends AnyFlatSpec with Matchers:
 
@@ -51,11 +51,9 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
 
   // ── getGameState ─────────────────────────────────────────────────────────────
 
-  "GameService.getGameState" should "throw GameNotFoundException for unknown game" in {
+  "GameService.getGameState" should "return Left for unknown game" in {
     val svc = GameService()
-    intercept[GameNotFoundException] {
-      svc.getGameState("no-such-id")
-    }
+    svc.getGameState("no-such-id").isLeft should be(true)
   }
 
   it should "reflect WHITE turn at start" in {
@@ -107,11 +105,9 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     svc.makeMoveAlgebraic(id, "e2", "e5", None).isLeft should be(true)
   }
 
-  it should "throw GameNotFoundException for unknown game" in {
+  it should "return Left for unknown game" in {
     val svc = GameService()
-    intercept[GameNotFoundException] {
-      svc.makeMoveAlgebraic("no-such-id", "e2", "e4", None)
-    }
+    svc.makeMoveAlgebraic("no-such-id", "e2", "e4", None).isLeft should be(true)
   }
 
   it should "return Left for an invalid from-square notation" in {
@@ -162,11 +158,9 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     svc.makeMoveSan(id, "e5").isLeft should be(true)
   }
 
-  it should "throw GameNotFoundException for unknown game" in {
+  it should "return Left for unknown game" in {
     val svc = GameService()
-    intercept[GameNotFoundException] {
-      svc.makeMoveSan("no-such-id", "e4")
-    }
+    svc.makeMoveSan("no-such-id", "e4").isLeft should be(true)
   }
 
   it should "return Right for a knight SAN move" in {
@@ -184,11 +178,9 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     moves.size should be(20)
   }
 
-  it should "throw GameNotFoundException for unknown game" in {
+  it should "return Left for unknown game" in {
     val svc = GameService()
-    intercept[GameNotFoundException] {
-      svc.getLegalMoves("no-such-id")
-    }
+    svc.getLegalMoves("no-such-id").isLeft should be(true)
   }
 
   it should "return moves with two-character from/to algebraic notation" in {
@@ -230,11 +222,9 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     svc.importFen(id, "not-a-fen").isLeft should be(true)
   }
 
-  it should "throw GameNotFoundException for unknown game" in {
+  it should "return Left for unknown game" in {
     val svc = GameService()
-    intercept[GameNotFoundException] {
-      svc.importFen("no-such-id", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-    }
+    svc.importFen("no-such-id", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").isLeft should be(true)
   }
 
   it should "update the FEN in game state after import" in {
@@ -273,11 +263,9 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     state.fullmoveNumber should be(2)
   }
 
-  it should "throw GameNotFoundException for unknown game" in {
+  it should "return Left for unknown game" in {
     val svc = GameService()
-    intercept[GameNotFoundException] {
-      svc.importPgn("no-such-id", "[White \"A\"]\n\n1. e4 *")
-    }
+    svc.importPgn("no-such-id", "[White \"A\"]\n\n1. e4 *").isLeft should be(true)
   }
 
   it should "reject malformed PGN (bad header syntax)" in {
@@ -313,11 +301,9 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     svc.undo(id).isLeft should be(true)
   }
 
-  it should "throw GameNotFoundException for unknown game" in {
+  it should "return Left for unknown game" in {
     val svc = GameService()
-    intercept[GameNotFoundException] {
-      svc.undo("no-such-id")
-    }
+    svc.undo("no-such-id").isLeft should be(true)
   }
 
   it should "return Right with a FEN after a successful move and undo" in {
@@ -352,11 +338,9 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     svc.redo(id).isLeft should be(true)
   }
 
-  it should "throw GameNotFoundException for unknown game" in {
+  it should "return Left for unknown game" in {
     val svc = GameService()
-    intercept[GameNotFoundException] {
-      svc.redo("no-such-id")
-    }
+    svc.redo("no-such-id").isLeft should be(true)
   }
 
   it should "return Right after move then undo then redo" in {
@@ -396,16 +380,12 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     val svc = GameService()
     val id  = svc.createGame()
     svc.deleteGame(id)
-    intercept[GameNotFoundException] {
-      svc.getGameState(id)
-    }
+    svc.getGameState(id).isLeft should be(true)
   }
 
-  it should "throw GameNotFoundException for unknown game" in {
+  it should "return Left for unknown game" in {
     val svc = GameService()
-    intercept[GameNotFoundException] {
-      svc.deleteGame("no-such-id")
-    }
+    svc.deleteGame("no-such-id").isLeft should be(true)
   }
 
   it should "allow creating a new game after the original is deleted" in {
@@ -441,11 +421,9 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     result should include("[Black")
   }
 
-  it should "throw GameNotFoundException for unknown game" in {
+  it should "return Left for unknown game" in {
     val svc = GameService()
-    intercept[GameNotFoundException] {
-      svc.getPgn("no-such-id")
-    }
+    svc.getPgn("no-such-id").isLeft should be(true)
   }
 
   it should "include move notation after a move is made" in {

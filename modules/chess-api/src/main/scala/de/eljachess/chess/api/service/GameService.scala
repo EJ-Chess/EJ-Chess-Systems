@@ -3,7 +3,6 @@ package de.eljachess.chess.api.service
 import de.eljachess.chess.controller.{GameController, GameManager, SanDecoder}
 import de.eljachess.chess.model.{Board, Color, Fen, PieceKind, Pgn, Square}
 import de.eljachess.chess.api.dto.{GameStateResponse, MoveNotation}
-import de.eljachess.chess.api.exception.GameNotFoundException
 import jakarta.enterprise.context.ApplicationScoped
 import java.util.UUID
 import scala.collection.mutable
@@ -28,139 +27,119 @@ class GameService:
     to:        String,
     promotion: Option[String]
   ): Either[String, Unit] =
-    val manager = getGameOrThrow(gameId)
-    parseSquare(from) match
-      case None =>
-        Left(s"Invalid square: '$from'")
-      case Some(_) =>
-        parseSquare(to) match
-          case None =>
-            Left(s"Invalid square: '$to'")
-          case Some(_) =>
-            val promoSuffix = promotion
-              .flatMap(p => parsePromotion(p))
-              .map(k => s" ${pieceKindToChar(k)}")
-              .getOrElse("")
-            val command = s"$from $to$promoSuffix"
-            val result  = manager.move(command)
-            if result.startsWith("Invalid") || result.startsWith("No piece") || result.startsWith("It's") then
-              Left(result)
-            else
-              Right(())
+    for
+      manager <- findGame(gameId)
+      _       <- parseSquare(from).toRight(s"Invalid square: '$from'")
+      _       <- parseSquare(to).toRight(s"Invalid square: '$to'")
+    yield
+      val promoSuffix = promotion
+        .flatMap(p => parsePromotion(p))
+        .map(k => s" ${pieceKindToChar(k)}")
+        .getOrElse("")
+      val command = s"$from $to$promoSuffix"
+      val result  = manager.move(command)
+      if result.startsWith("Invalid") || result.startsWith("No piece") || result.startsWith("It's") then
+        return Left(result)
 
   def makeMoveSan(gameId: String, san: String): Either[String, Unit] =
-    val manager = getGameOrThrow(gameId)
-    val ctrl    = manager.state
-    SanDecoder.expand(ctrl.board, ctrl.currentTurn, san) match
-      case Left(err) =>
-        Left(err)
-      case Right((from, to, promo)) =>
-        val promoSuffix = promo.map(k => s" ${pieceKindToChar(k)}").getOrElse("")
-        val command     = s"${from.toAlgebraic} ${to.toAlgebraic}$promoSuffix"
-        val result      = manager.move(command)
-        if result.startsWith("Invalid") || result.startsWith("No piece") || result.startsWith("It's") then
-          Left(result)
-        else
-          Right(())
+    for
+      manager        <- findGame(gameId)
+      (from, to, pr) <- SanDecoder.expand(manager.state.board, manager.state.currentTurn, san)
+    yield
+      val promoSuffix = pr.map(k => s" ${pieceKindToChar(k)}").getOrElse("")
+      val command     = s"${from.toAlgebraic} ${to.toAlgebraic}$promoSuffix"
+      val result      = manager.move(command)
+      if result.startsWith("Invalid") || result.startsWith("No piece") || result.startsWith("It's") then
+        return Left(result)
 
   def importPgn(gameId: String, pgnString: String): Either[String, Unit] =
-    val manager = getGameOrThrow(gameId)
-    Pgn.decode(pgnString) match
-      case Left(err) =>
-        Left(err)
-      case Right((_, moves)) =>
-        val newManager = GameManager(GameController(Board.initial))
-        val errors = moves.flatMap { san =>
-          val ctrl = newManager.state
-          SanDecoder.expand(ctrl.board, ctrl.currentTurn, san) match
-            case Left(err) =>
-              Some(s"Failed to parse SAN '$san': $err")
-            case Right((from, to, promo)) =>
-              val promoSuffix = promo.map(k => s" ${pieceKindToChar(k)}").getOrElse("")
-              val command     = s"${from.toAlgebraic} ${to.toAlgebraic}$promoSuffix"
-              val result      = newManager.move(command)
-              if result.startsWith("Invalid") || result.startsWith("No piece") || result.startsWith("It's") then
-                Some(s"Move '$san' failed: $result")
-              else
-                None
-        }
-        errors.headOption match
-          case Some(err) => Left(err)
-          case None =>
-            games(gameId) = newManager
-            Right(())
+    for
+      _              <- findGame(gameId)
+      (_, moves)     <- Pgn.decode(pgnString)
+    yield
+      val newManager = GameManager(GameController(Board.initial))
+      val errors = moves.flatMap { san =>
+        val ctrl = newManager.state
+        SanDecoder.expand(ctrl.board, ctrl.currentTurn, san) match
+          case Left(err) =>
+            Some(s"Failed to parse SAN '$san': $err")
+          case Right((from, to, promo)) =>
+            val promoSuffix = promo.map(k => s" ${pieceKindToChar(k)}").getOrElse("")
+            val command     = s"${from.toAlgebraic} ${to.toAlgebraic}$promoSuffix"
+            val result      = newManager.move(command)
+            if result.startsWith("Invalid") || result.startsWith("No piece") || result.startsWith("It's") then
+              Some(s"Move '$san' failed: $result")
+            else
+              None
+      }
+      errors.headOption match
+        case Some(err) => return Left(err)
+        case None =>
+          games(gameId) = newManager
 
   def importFen(gameId: String, fenString: String): Either[String, Unit] =
-    getGameOrThrow(gameId)
-    Fen.decode(fenString) match
-      case Left(err) =>
-        Left(err)
-      case Right(ctrl) =>
-        games(gameId) = GameManager(ctrl)
-        Right(())
+    for
+      _    <- findGame(gameId)
+      ctrl <- Fen.decode(fenString)
+    yield
+      games(gameId) = GameManager(ctrl)
 
   def undo(gameId: String): Either[String, String] =
-    val manager = getGameOrThrow(gameId)
-    val result  = manager.undo()
-    if result == "Nothing to undo" then
-      Left(result)
-    else
-      Right(Fen.encode(manager.state))
+    findGame(gameId).flatMap { manager =>
+      val result = manager.undo()
+      if result == "Nothing to undo" then Left(result)
+      else Right(Fen.encode(manager.state))
+    }
 
   def redo(gameId: String): Either[String, String] =
-    val manager = getGameOrThrow(gameId)
-    val result  = manager.redo()
-    if result == "Nothing to redo" then
-      Left(result)
-    else
-      Right(Fen.encode(manager.state))
+    findGame(gameId).flatMap { manager =>
+      val result = manager.redo()
+      if result == "Nothing to redo" then Left(result)
+      else Right(Fen.encode(manager.state))
+    }
 
   def getGameState(gameId: String): Either[String, GameStateResponse] =
-    val manager = getGameOrThrow(gameId)
-    val ctrl    = manager.state
-    val board   = ctrl.board
-    val color   = ctrl.currentTurn
-    val legalMs = board.legalMoves(color)
-    val inCheck      = board.isInCheck(color)
-    val hasLegalMoves = legalMs.nonEmpty
-    val inCheckmate  = inCheck && !hasLegalMoves
-    val inStalemate  = !inCheck && !hasLegalMoves
-    Right(GameStateResponse(
-      gameId         = gameId,
-      fen            = Fen.encode(ctrl),
-      currentTurn    = if color == Color.White then "WHITE" else "BLACK",
-      fullmoveNumber = ctrl.fullmoveNumber,
-      halfmoveClock  = ctrl.halfmoveClock,
-      inCheck        = inCheck,
-      inCheckmate    = inCheckmate,
-      inStalemate    = inStalemate,
-      legalMovesCount = legalMs.size
-    ))
+    findGame(gameId).map { manager =>
+      val ctrl  = manager.state
+      val board = ctrl.board
+      val color = ctrl.currentTurn
+      val legalMs       = board.legalMoves(color)
+      val inCheck       = board.isInCheck(color)
+      val hasLegalMoves = legalMs.nonEmpty
+      GameStateResponse(
+        gameId          = gameId,
+        fen             = Fen.encode(ctrl),
+        currentTurn     = if color == Color.White then "WHITE" else "BLACK",
+        fullmoveNumber  = ctrl.fullmoveNumber,
+        halfmoveClock   = ctrl.halfmoveClock,
+        inCheck         = inCheck,
+        inCheckmate     = inCheck && !hasLegalMoves,
+        inStalemate     = !inCheck && !hasLegalMoves,
+        legalMovesCount = legalMs.size
+      )
+    }
 
   def getLegalMoves(gameId: String): Either[String, List[MoveNotation]] =
-    val manager = getGameOrThrow(gameId)
-    val ctrl    = manager.state
-    val moves   = ctrl.board.legalMoves(ctrl.currentTurn).map { case (from, to) =>
-      MoveNotation(from = from.toAlgebraic, to = to.toAlgebraic, promotion = None)
+    findGame(gameId).map { manager =>
+      val ctrl = manager.state
+      ctrl.board.legalMoves(ctrl.currentTurn).map { case (from, to) =>
+        MoveNotation(from = from.toAlgebraic, to = to.toAlgebraic, promotion = None)
+      }
     }
-    Right(moves)
 
   def getPgn(gameId: String): Either[String, String] =
-    val manager = getGameOrThrow(gameId)
-    Right(manager.pgn("White", "Black"))
+    findGame(gameId).map(_.pgn("White", "Black"))
 
   def getManager(gameId: String): Either[String, GameManager] =
-    games.get(gameId).toRight(s"Game not found: $gameId")
+    findGame(gameId)
 
   def deleteGame(gameId: String): Either[String, Unit] =
-    getGameOrThrow(gameId)
-    games.remove(gameId)
-    Right(())
+    findGame(gameId).map { _ => games.remove(gameId) }
 
   // ── Private helpers ────────────────────────────────────────────────────────
 
-  private def getGameOrThrow(gameId: String): GameManager =
-    games.getOrElse(gameId, throw GameNotFoundException(gameId))
+  private def findGame(gameId: String): Either[String, GameManager] =
+    games.get(gameId).toRight(s"Game not found: $gameId")
 
   private def parseSquare(s: String): Option[Square] =
     if s.length == 2 && s(0) >= 'a' && s(0) <= 'h' && s(1) >= '1' && s(1) <= '8' then
