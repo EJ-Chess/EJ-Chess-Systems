@@ -17,7 +17,11 @@ case class Board(
               enPassantTarget.contains(to) &&
               math.abs(to.col - from.col) == 1 &&
               pieceAt(to).isEmpty then
-        enPassantCapture(from, to, piece.color)
+        val direction = if piece.color == Color.White then 1 else -1
+        if from.row + direction == to.row then
+          enPassantCapture(from, to, piece.color)
+        else
+          None
       // Step 3: Promotion (pawn reaches back rank)
       else if piece.kind == PieceKind.Pawn &&
               ((piece.color == Color.White && to.row == 7) ||

@@ -1,6 +1,7 @@
 plugins {
     id("scala")
     id("org.scoverage") version "8.1"
+    application
 }
 
 @Suppress("UNCHECKED_CAST")
@@ -16,6 +17,20 @@ scala {
 
 scoverage {
     scoverageVersion.set(versions["SCOVERAGE"]!!)
+    excludedFiles.addAll(".*GameSetupScene.*", ".*BotMain.*")
+}
+
+application {
+    mainClass.set("de.eljachess.bot.botMain")
+}
+
+tasks.named<JavaExec>("run") {
+    jvmArgs(
+        "-Dfile.encoding=UTF-8",
+        "-Dstdout.encoding=UTF-8",
+        "--add-modules=javafx.controls,javafx.graphics"
+    )
+    standardInput = System.`in`
 }
 
 dependencies {
@@ -23,6 +38,14 @@ dependencies {
 
     implementation("org.scala-lang:scala3-library_3") {
         version { strictly(versions["SCALA3"]!!) }
+    }
+
+    // JavaFX for GUI setup scene
+    implementation("org.scalafx:scalafx_3:${versions["SCALAFX"]!!}") {
+        exclude(group = "org.scala-lang", module = "scala-library")
+    }
+    listOf("javafx-base", "javafx-controls", "javafx-graphics").forEach { module ->
+        implementation("org.openjfx:$module:${versions["JAVAFX"]!!}:win")
     }
 
     testImplementation(platform("org.junit:junit-bom:${versions["JUNIT_BOM"]!!}"))

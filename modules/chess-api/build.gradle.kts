@@ -26,6 +26,9 @@ dependencies {
     // Core: import chess domain from core module
     implementation(project(":core"))
 
+    // Bot: game setup with configurable bot difficulty
+    implementation(project(":modules:chess-bot"))
+
     // JavaFX / ScalaFX (for local GUI startup)
     implementation("org.scalafx:scalafx_3:${versions["SCALAFX"]!!}") {
         exclude(group = "org.scala-lang", module = "scala-library")

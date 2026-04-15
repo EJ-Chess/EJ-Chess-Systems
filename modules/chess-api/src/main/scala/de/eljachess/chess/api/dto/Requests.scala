@@ -1,7 +1,12 @@
 package de.eljachess.chess.api.dto
 
 // Game Management
-case class CreateGameRequest()
+case class CreateGameRequest(
+  playerName:  Option[String] = None,   // defaults to "Player"
+  playerColor: Option[String] = None,   // "white" | "black", defaults to "white"
+  opponent:    Option[String] = None,   // "human" | "bot", defaults to "human"
+  botElo:      Option[Int]    = None    // ELO if opponent=bot, defaults to 1400
+)
 
 case class ImportRequest(
   pgn: Option[String] = None,
