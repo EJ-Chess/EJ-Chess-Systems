@@ -1,5 +1,6 @@
 package de.eljachess.bot
 
+import de.eljachess.chess.controller.Bot
 import de.eljachess.chess.model.{Board, Color, Piece, PieceKind, Square}
 import scala.util.Random
 
