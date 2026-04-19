@@ -5,9 +5,11 @@ import de.eljachess.chess.model.{Board, Color, Fen, PieceKind, Square}
 
 case class GameController(
   board:          Board,
-  currentTurn:    Color = Color.White,
-  halfmoveClock:  Int   = 0,
-  fullmoveNumber: Int   = 1
+  currentTurn:    Color         = Color.White,
+  halfmoveClock:  Int           = 0,
+  fullmoveNumber: Int           = 1,
+  bot:            Option[Bot]   = None,
+  playerColor:    Option[Color] = None
 ):
 
   private def colorName(c: Color): String = if c == Color.White then "White" else "Black"
@@ -53,6 +55,7 @@ case class GameController(
                 val newFullmove = if currentTurn == Color.Black then fullmoveNumber + 1 else fullmoveNumber
                 val moveMsg     = s"Moved ${from.toAlgebraic} to ${to.toAlgebraic}"
                 val captureStr  = captured.map(p => s" – captured ${colorName(p.color)} ${kindName(p.kind)}").getOrElse("")
+                val afterPlayer = GameController(newBoard, nextTurn, newHalfmove, newFullmove, bot, playerColor)
                 val statusStr   =
                   val inCheck  = newBoard.isInCheck(nextTurn)
                   val hasMoves = newBoard.legalMoves(nextTurn).nonEmpty
@@ -60,4 +63,27 @@ case class GameController(
                   else if !inCheck && !hasMoves then " – Stalemate!"
                   else if inCheck then " – Check!"
                   else ""
-                (GameController(newBoard, nextTurn, newHalfmove, newFullmove), moveMsg + captureStr + statusStr)
+                // Auto-play bot move if it's the bot's turn and game is not over
+                val isGameOver = statusStr.contains("Checkmate") || statusStr.contains("Stalemate")
+                val finalCtrl = if bot.isDefined && playerColor.exists(_ != nextTurn) && !isGameOver then
+                  applyBotMove(afterPlayer)
+                else
+                  afterPlayer
+                (finalCtrl, moveMsg + captureStr + statusStr)
+
+  private def applyBotMove(ctrl: GameController): GameController =
+    ctrl.bot match
+      case None => ctrl
+      case Some(b) =>
+        b.nextMove(ctrl.board, ctrl.currentTurn) match
+          case None => ctrl  // bot in checkmate/stalemate, game over
+          case Some((from, to)) =>
+            ctrl.board.move(from, to) match
+              case None          => ctrl  // shouldn't happen with legal bot move
+              case Some(newBoard) =>
+                val nextTurn    = if ctrl.currentTurn == Color.White then Color.Black else Color.White
+                val isPawnMove  = ctrl.board.pieceAt(from).exists(_.kind == PieceKind.Pawn)
+                val isCapture   = ctrl.board.pieceAt(to).isDefined
+                val newHalfmove = if isPawnMove || isCapture then 0 else ctrl.halfmoveClock + 1
+                val newFullmove = if ctrl.currentTurn == Color.Black then ctrl.fullmoveNumber + 1 else ctrl.fullmoveNumber
+                GameController(newBoard, nextTurn, newHalfmove, newFullmove, ctrl.bot, ctrl.playerColor)

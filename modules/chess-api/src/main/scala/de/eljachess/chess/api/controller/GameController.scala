@@ -16,8 +16,8 @@ class GameController:
   var service: GameService = uninitialized
 
   @POST
-  def createGame(): Response =
-    val gameId = service.createGame()
+  def createGame(req: CreateGameRequest): Response =
+    val gameId = service.createGame(req)
     service.getGameState(gameId) match
       case Right(state) =>
         Response.status(Response.Status.CREATED)

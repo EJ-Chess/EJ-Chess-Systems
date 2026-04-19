@@ -549,6 +549,32 @@ class BoardSpec extends AnyFlatSpec with Matchers:
     b2.move(Square(4, 4), Square(3, 5)) shouldBe None
   }
 
+  it should "not allow en passant capture from wrong rank (bug regression test)" in {
+    // White pawn advances from a2 to a4, setting enPassantTarget to a3
+    val b = Board(Map(
+      Square(0, 1) -> Piece(Color.White, PieceKind.Pawn),
+      Square(1, 6) -> Piece(Color.Black, PieceKind.Pawn)
+    )).move(Square(0, 1), Square(0, 3)).get  // a2-a4, enPassantTarget=a3
+
+    // Black pawn on b7 cannot capture en passant to a3 (wrong rank!)
+    // The pawn would need to be on b4 to capture on a3
+    b.move(Square(1, 6), Square(0, 2)) shouldBe None  // b7-a3 is invalid
+  }
+
+  it should "still allow correct en passant captures on the correct rank" in {
+    // White pawn advances from a2 to a4, setting enPassantTarget to a3
+    val b = Board(Map(
+      Square(0, 3) -> Piece(Color.White, PieceKind.Pawn),  // a4
+      Square(1, 3) -> Piece(Color.Black, PieceKind.Pawn)   // b4
+    ), enPassantTarget = Some(Square(0, 2)))  // enPassantTarget=a3
+
+    // Black pawn on b4 CAN capture en passant to a3
+    val result = b.move(Square(1, 3), Square(0, 2))
+    result shouldBe defined
+    result.get.pieceAt(Square(0, 2)) shouldBe Some(Piece(Color.Black, PieceKind.Pawn))
+    result.get.pieceAt(Square(0, 3)) shouldBe None  // captured pawn removed
+  }
+
   // ── Promotion ─────────────────────────────────────────────────────────────
 
   "Board.move for promotion" should "promote white pawn to Queen" in {

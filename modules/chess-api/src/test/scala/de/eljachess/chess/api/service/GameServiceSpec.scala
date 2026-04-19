@@ -397,6 +397,39 @@ class GameServiceSpec extends AnyFlatSpec with Matchers:
     svc.getGameState(id2).isRight should be(true)
   }
 
+  // ── createGame with bot ───────────────────────────────────────────────────────
+
+  "GameService.createGame with bot" should "create game vs bot when opponent=bot" in {
+    import de.eljachess.chess.api.dto.CreateGameRequest
+    val svc = GameService()
+    val id  = svc.createGame(CreateGameRequest(opponent = Some("bot"), botElo = Some(1400)))
+    val state = svc.getGameState(id).toOption.get
+    state.fen should not be empty
+  }
+
+  it should "create human game when opponent=human" in {
+    import de.eljachess.chess.api.dto.CreateGameRequest
+    val svc = GameService()
+    val id  = svc.createGame(CreateGameRequest(playerName = Some("Alice"), opponent = Some("human")))
+    val state = svc.getGameState(id).toOption.get
+    state.currentTurn should be("WHITE")
+  }
+
+  it should "create game with default settings when no request fields set" in {
+    import de.eljachess.chess.api.dto.CreateGameRequest
+    val svc   = GameService()
+    val id    = svc.createGame(CreateGameRequest())
+    val state = svc.getGameState(id).toOption.get
+    state.fen should startWith("rnbqkbnr/pppppppp")
+  }
+
+  it should "create bot game with Beginner ELO (800)" in {
+    import de.eljachess.chess.api.dto.CreateGameRequest
+    val svc = GameService()
+    val id  = svc.createGame(CreateGameRequest(opponent = Some("bot"), botElo = Some(800)))
+    svc.getGameState(id).isRight should be(true)
+  }
+
   // ── getPgn ───────────────────────────────────────────────────────────────────
 
   "GameService.getPgn" should "return a non-empty PGN string for a new game" in {

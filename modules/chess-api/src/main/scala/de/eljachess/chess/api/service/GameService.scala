@@ -2,7 +2,8 @@ package de.eljachess.chess.api.service
 
 import de.eljachess.chess.controller.{GameController, GameManager, SanDecoder}
 import de.eljachess.chess.model.{Board, Color, Fen, PieceKind, Pgn, Square}
-import de.eljachess.chess.api.dto.{GameStateResponse, MoveNotation}
+import de.eljachess.chess.api.dto.{CreateGameRequest, GameStateResponse, MoveNotation}
+import de.eljachess.bot.{BotOpponent, EloLevel, GameFactory, GameSetup, HumanOpponent}
 import jakarta.enterprise.context.ApplicationScoped
 import java.util.UUID
 import scala.collection.mutable
@@ -14,9 +15,16 @@ class GameService:
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  def createGame(): String =
-    val id      = UUID.randomUUID().toString
-    val initial = GameController(Board.initial)
+  def createGame(request: CreateGameRequest = CreateGameRequest()): String =
+    val id          = UUID.randomUUID().toString
+    val playerColor = if request.playerColor.exists(_.toLowerCase == "black") then Color.Black else Color.White
+    val opponent = request.opponent.map(_.toLowerCase) match
+      case Some("bot") =>
+        val elo = request.botElo.map(EloLevel.custom).getOrElse(EloLevel.Intermediate)
+        BotOpponent(elo)
+      case _ => HumanOpponent
+    val setup   = GameSetup(request.playerName.getOrElse("Player"), playerColor, opponent)
+    val initial = GameFactory.createGame(setup)
     val manager = GameManager(initial)
     games(id)   = manager
     id
