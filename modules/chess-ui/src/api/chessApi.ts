@@ -91,14 +91,23 @@ async function handleResponse<T>(res: Response): Promise<T> {
 const json = (body: unknown) => JSON.stringify(body)
 const jsonHeaders = { 'Content-Type': 'application/json' }
 
+// ─── Request Types ────────────────────────────────────────────────────────────
+
+export interface CreateGameRequest {
+  playerName?: string
+  playerColor?: 'white' | 'black'
+  opponent?: 'human' | 'bot'
+  botElo?: number
+}
+
 // ─── API Client ───────────────────────────────────────────────────────────────
 
 export const chessApi = {
-  createGame(): Promise<GameCreatedResponse> {
+  createGame(options: CreateGameRequest = {}): Promise<GameCreatedResponse> {
     return fetch(BASE_URL, {
       method: 'POST',
       headers: jsonHeaders,
-      body: json({}),
+      body: json(options),
     }).then(handleResponse<GameCreatedResponse>)
   },
 

@@ -10,11 +10,13 @@ import { HomeConfirmDialog } from './components/HomeConfirmDialog'
 import { ChessClock } from './components/ChessClock'
 import { LogModal } from './components/LogModal'
 import { ClockSettingsModal } from './components/ClockSettingsModal'
+import { GameSetupModal } from './components/GameSetupModal'
 import {
   chessApi,
   ApiError,
   type GameStateResponse,
   type MoveNotation,
+  type CreateGameRequest,
 } from './api/chessApi'
 
 const INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
@@ -33,6 +35,11 @@ export default function App() {
   const [showHomeDialog, setShowHomeDialog] = useState(false)
   const [showLog, setShowLog] = useState(false)
   const [showClockSettings, setShowClockSettings] = useState(false)
+  const [showGameSetup, setShowGameSetup] = useState(false)
+
+  // ── Game mode ─────────────────────────────────────────────────────────────
+  const [playerColor, setPlayerColor] = useState<'white' | 'black'>('white')
+  const [opponentType, setOpponentType] = useState<'human' | 'bot'>('human')
 
   // ── Chess clock ───────────────────────────────────────────────────────────
   const [clockSetting, setClockSetting] = useState(CLOCK_START)
@@ -43,6 +50,12 @@ export default function App() {
   const isGameOver = gameState?.inCheckmate ?? gameState?.inStalemate ?? false
   const activePlayer = gameState?.currentTurn ?? null
   const clockRunning = !!gameId && !!gameState && !isGameOver
+
+  // Bot's turn: opponent is bot and current turn is NOT the player's color
+  const isBotTurn =
+    opponentType === 'bot' &&
+    gameState !== null &&
+    gameState.currentTurn !== (playerColor.toUpperCase() as 'WHITE' | 'BLACK')
 
   useEffect(() => {
     if (clockIntervalRef.current) clearInterval(clockIntervalRef.current)
@@ -95,10 +108,13 @@ export default function App() {
   }, [gameId, refreshGame])
 
   // ── New Game ──────────────────────────────────────────────────────────────
-  const handleNewGame = useCallback(async () => {
+  const handleNewGame = useCallback(async (options: CreateGameRequest = {}) => {
+    setShowGameSetup(false)
     setLoading(true)
+    setPlayerColor(options.playerColor ?? 'white')
+    setOpponentType(options.opponent ?? 'human')
     try {
-      const created = await chessApi.createGame()
+      const created = await chessApi.createGame(options)
       localStorage.setItem(STORAGE_KEY, created.gameId)
       setGameId(created.gameId)
       setPosition(created.fen)
@@ -114,7 +130,7 @@ export default function App() {
     } finally {
       setLoading(false)
     }
-  }, [refreshGame])
+  }, [refreshGame, clockSetting])
 
   // ── Make Move ─────────────────────────────────────────────────────────────
   const handleMove = useCallback(
@@ -220,9 +236,21 @@ export default function App() {
   }, [clockSetting])
 
   const handleHomeSave = useCallback(() => {
-    // Keep localStorage — session survives for later
+    const content = pgn?.trim() ? pgn : position
+    const ext = pgn?.trim() ? 'pgn' : 'fen'
+    const mimeType = pgn?.trim() ? 'application/x-chess-pgn' : 'text/plain'
+    const filename = `eja-chess-${gameId?.slice(0, 8) ?? 'game'}.${ext}`
+    const blob = new Blob([content], { type: mimeType })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
     goHome()
-  }, [goHome])
+  }, [pgn, position, gameId, goHome])
 
   const handleHomeDiscard = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY)
@@ -249,6 +277,12 @@ export default function App() {
         currentSeconds={clockSetting}
         onApply={handleClockApply}
         onCancel={() => setShowClockSettings(false)}
+      />
+
+      <GameSetupModal
+        open={showGameSetup}
+        onStart={handleNewGame}
+        onCancel={() => setShowGameSetup(false)}
       />
 
       {/* ── Header ── */}
@@ -278,7 +312,7 @@ export default function App() {
             <GameControls
               hasGame={!!gameId}
               loading={loading}
-              onNewGame={handleNewGame}
+              onNewGame={() => setShowGameSetup(true)}
               onUndo={handleUndo}
               onRedo={handleRedo}
             />
@@ -308,8 +342,9 @@ export default function App() {
               </p>
             </div>
             <button
-              onClick={handleNewGame}
+              onClick={() => setShowGameSetup(true)}
               disabled={loading}
+              data-testid="btn-start-welcome"
               className="px-8 py-3 bg-green-600 hover:bg-green-500 active:bg-green-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-40 text-base"
             >
               {loading ? 'Wird gestartet…' : 'Neues Spiel starten'}
@@ -323,8 +358,9 @@ export default function App() {
               <div style={{ width: 'min(100vw - 2rem, 560px)' }}>
                 <ChessBoard
                   position={position}
-                  legalMoves={isGameOver ? [] : legalMoves}
-                  disabled={loading || isGameOver}
+                  legalMoves={isGameOver || isBotTurn ? [] : legalMoves}
+                  disabled={loading || isGameOver || isBotTurn}
+                  orientation={playerColor}
                   onMove={handleMove}
                 />
               </div>
@@ -375,7 +411,7 @@ export default function App() {
                 <div className="rounded-xl bg-zinc-800/60 border border-zinc-700 p-4 text-center">
                   <p className="text-zinc-400 text-sm mb-3">Partie beendet</p>
                   <button
-                    onClick={handleNewGame}
+                    onClick={() => setShowGameSetup(true)}
                     className="w-full px-4 py-2 bg-green-600 hover:bg-green-500 text-white font-medium rounded-lg transition-colors text-sm"
                   >
                     Neue Partie

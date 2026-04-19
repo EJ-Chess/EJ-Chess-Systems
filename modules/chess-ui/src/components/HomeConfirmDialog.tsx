@@ -27,7 +27,7 @@ export function HomeConfirmDialog({
         <DialogHeader>
           <DialogTitle>Spiel verlassen?</DialogTitle>
           <DialogDescription>
-            Möchtest du die aktuelle Session speichern? Du kannst dann später weiterspielen.
+            Möchtest du die Partie speichern? Die Zugfolge wird als PGN-Datei heruntergeladen.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">

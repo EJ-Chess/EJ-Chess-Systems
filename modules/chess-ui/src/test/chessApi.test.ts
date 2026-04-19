@@ -71,6 +71,42 @@ describe('chessApi.createGame', () => {
     expect(result.fen).toBe(INITIAL_FEN)
   })
 
+  it('sends empty body when called without options', async () => {
+    let capturedBody: unknown
+    server.use(
+      http.post('/games', async ({ request }) => {
+        capturedBody = await request.json()
+        return HttpResponse.json({ gameId: GAME_ID, fen: INITIAL_FEN }, { status: 201 })
+      }),
+    )
+    await chessApi.createGame()
+    expect(capturedBody).toEqual({})
+  })
+
+  it('sends opponent and botElo when playing against bot', async () => {
+    let capturedBody: unknown
+    server.use(
+      http.post('/games', async ({ request }) => {
+        capturedBody = await request.json()
+        return HttpResponse.json({ gameId: GAME_ID, fen: INITIAL_FEN }, { status: 201 })
+      }),
+    )
+    await chessApi.createGame({ opponent: 'bot', playerColor: 'white', botElo: 1400 })
+    expect(capturedBody).toEqual({ opponent: 'bot', playerColor: 'white', botElo: 1400 })
+  })
+
+  it('sends playerColor black for bot game', async () => {
+    let capturedBody: unknown
+    server.use(
+      http.post('/games', async ({ request }) => {
+        capturedBody = await request.json()
+        return HttpResponse.json({ gameId: GAME_ID, fen: INITIAL_FEN }, { status: 201 })
+      }),
+    )
+    await chessApi.createGame({ opponent: 'bot', playerColor: 'black', botElo: 800 })
+    expect(capturedBody).toEqual({ opponent: 'bot', playerColor: 'black', botElo: 800 })
+  })
+
   it('throws ApiError on server error', async () => {
     server.use(
       http.post('/games', () =>
