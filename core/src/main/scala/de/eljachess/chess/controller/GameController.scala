@@ -64,7 +64,8 @@ case class GameController(
                   else if inCheck then " – Check!"
                   else ""
                 // Auto-play bot move if it's the bot's turn and game is not over
-                val finalCtrl = if bot.isDefined && playerColor.exists(_ != nextTurn) && statusStr.isEmpty then
+                val isGameOver = statusStr.contains("Checkmate") || statusStr.contains("Stalemate")
+                val finalCtrl = if bot.isDefined && playerColor.exists(_ != nextTurn) && !isGameOver then
                   applyBotMove(afterPlayer)
                 else
                   afterPlayer

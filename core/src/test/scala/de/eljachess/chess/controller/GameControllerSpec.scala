@@ -294,3 +294,23 @@ class GameControllerSpec extends AnyFlatSpec with Matchers:
     result shouldBe ctrl
     msg should startWith ("Invalid FEN:")
   }
+
+  // ── Bot behaviour ─────────────────────────────────────────────────────────
+
+  "GameController with bot" should "continue playing after player gives the bot check" in {
+    // Regression: bot was silently skipping its turn when the player gave check
+    // White (player): King a1, Rook a7 | Black (bot): King h8
+    val board = Board(Map(
+      Square(0, 0) -> Piece(Color.White, PieceKind.King),
+      Square(0, 6) -> Piece(Color.White, PieceKind.Rook),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.King)
+    ))
+    val dummyBot = new Bot:
+      def elo = 0
+      def nextMove(b: Board, c: Color) = b.legalMoves(c).headOption
+    val ctrl = GameController(board, Color.White, bot = Some(dummyBot), playerColor = Some(Color.White))
+    val (next, msg) = ctrl.handleCommand("a7 h7") // Rook h7 gives check to Black King
+    msg should include("Check!")
+    // Bot must have replied — it's White's turn again
+    next.currentTurn shouldBe Color.White
+  }
