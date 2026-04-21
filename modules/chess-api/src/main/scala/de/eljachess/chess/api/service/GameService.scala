@@ -1,32 +1,47 @@
 package de.eljachess.chess.api.service
 
+import de.eljachess.chess.api.client.BotClient
+import de.eljachess.chess.api.dto.{CreateGameRequest, GameStateResponse, MoveNotation}
 import de.eljachess.chess.controller.{GameController, GameManager, SanDecoder}
 import de.eljachess.chess.model.{Board, Color, Fen, PieceKind, Pgn, Square}
-import de.eljachess.chess.api.dto.{CreateGameRequest, GameStateResponse, MoveNotation}
-import de.eljachess.bot.{BotOpponent, EloLevel, GameFactory, GameSetup, HumanOpponent}
 import jakarta.enterprise.context.ApplicationScoped
+import jakarta.inject.Inject
 import java.util.UUID
+import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
+
+/** Per-game bot configuration (stored alongside the GameManager). */
+private case class BotConfig(botColor: Color, elo: Int)
 
 @ApplicationScoped
 class GameService:
 
-  private val games: mutable.Map[String, GameManager] = mutable.Map.empty
+  /** Injected by CDI; null when instantiated directly in unit tests (guarded below). */
+  @Inject
+  var botClient: BotClient = _
+
+  private val games:      mutable.Map[String, GameManager] = mutable.Map.empty
+  private val botConfigs: TrieMap[String, BotConfig]       = TrieMap.empty
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
   def createGame(request: CreateGameRequest = CreateGameRequest()): String =
     val id          = UUID.randomUUID().toString
     val playerColor = if request.playerColor.exists(_.toLowerCase == "black") then Color.Black else Color.White
-    val opponent = request.opponent.map(_.toLowerCase) match
+    val ctrl        = GameController(Board.initial)
+    val manager     = GameManager(ctrl)
+    games(id) = manager
+
+    request.opponent.map(_.toLowerCase) match
       case Some("bot") =>
-        val elo = request.botElo.map(EloLevel.custom).getOrElse(EloLevel.Intermediate)
-        BotOpponent(elo)
-      case _ => HumanOpponent
-    val setup   = GameSetup(request.playerName.getOrElse("Player"), playerColor, opponent)
-    val initial = GameFactory.createGame(setup)
-    val manager = GameManager(initial)
-    games(id)   = manager
+        val elo      = request.botElo.getOrElse(1400)
+        val botColor = if playerColor == Color.White then Color.Black else Color.White
+        botConfigs(id) = BotConfig(botColor, elo)
+        // If bot plays White (player chose Black) it makes the opening move immediately
+        if botColor == Color.White then
+          applyBotMoveIfNeeded(id, manager)
+      case _ => ()
+
     id
 
   def makeMoveAlgebraic(
@@ -48,6 +63,7 @@ class GameService:
       val result  = manager.move(command)
       if result.startsWith("Invalid") || result.startsWith("No piece") || result.startsWith("It's") then
         return Left(result)
+      applyBotMoveIfNeeded(gameId, manager)
 
   def makeMoveSan(gameId: String, san: String): Either[String, Unit] =
     for
@@ -59,11 +75,12 @@ class GameService:
       val result      = manager.move(command)
       if result.startsWith("Invalid") || result.startsWith("No piece") || result.startsWith("It's") then
         return Left(result)
+      applyBotMoveIfNeeded(gameId, manager)
 
   def importPgn(gameId: String, pgnString: String): Either[String, Unit] =
     for
-      _              <- findGame(gameId)
-      (_, moves)     <- Pgn.decode(pgnString)
+      _          <- findGame(gameId)
+      (_, moves) <- Pgn.decode(pgnString)
     yield
       val newManager = GameManager(GameController(Board.initial))
       val errors = moves.flatMap { san =>
@@ -82,8 +99,7 @@ class GameService:
       }
       errors.headOption match
         case Some(err) => return Left(err)
-        case None =>
-          games(gameId) = newManager
+        case None      => games(gameId) = newManager
 
   def importFen(gameId: String, fenString: String): Either[String, Unit] =
     for
@@ -108,9 +124,9 @@ class GameService:
 
   def getGameState(gameId: String): Either[String, GameStateResponse] =
     findGame(gameId).map { manager =>
-      val ctrl  = manager.state
-      val board = ctrl.board
-      val color = ctrl.currentTurn
+      val ctrl          = manager.state
+      val board         = ctrl.board
+      val color         = ctrl.currentTurn
       val legalMs       = board.legalMoves(color)
       val inCheck       = board.isInCheck(color)
       val hasLegalMoves = legalMs.nonEmpty
@@ -142,7 +158,28 @@ class GameService:
     findGame(gameId)
 
   def deleteGame(gameId: String): Either[String, Unit] =
-    findGame(gameId).map { _ => games.remove(gameId) }
+    findGame(gameId).map { _ =>
+      games.remove(gameId)
+      botConfigs.remove(gameId)
+    }
+
+  // ── Bot integration ────────────────────────────────────────────────────────
+
+  /**
+   * If this is a bot game and it is the bot's turn, delegate to BotClient
+   * (which is protected by @CircuitBreaker + @Timeout + @Fallback).
+   * Silently skipped when botClient is null (unit-test context without CDI).
+   */
+  private def applyBotMoveIfNeeded(gameId: String, manager: GameManager): Unit =
+    if botClient == null then return
+    for config <- botConfigs.get(gameId) do
+      val ctrl = manager.state
+      if ctrl.currentTurn == config.botColor then
+        val fen      = Fen.encode(ctrl)
+        val colorStr = if config.botColor == Color.White then "white" else "black"
+        botClient.fetchMove(fen, colorStr, config.elo) match
+          case Some((from, to)) => manager.move(s"$from $to")
+          case None             => () // no legal moves or service unavailable / circuit open
 
   // ── Private helpers ────────────────────────────────────────────────────────
 

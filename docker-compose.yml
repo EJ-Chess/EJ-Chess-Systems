@@ -1,0 +1,83 @@
+# ── EJa Chess — docker-compose ────────────────────────────────────────────────
+#
+# Prerequisites (build Quarkus fast-jars first):
+#   ./gradlew :modules:chess-api:quarkusBuild :modules:bot-service:quarkusBuild
+#
+# Start all services (without Jaeger):
+#   docker-compose up --build
+#
+# Start with Distributed Tracing (Jaeger):
+#   docker-compose --profile observability up --build
+#
+# URLs after startup:
+#   Web-UI          →  http://localhost:5173
+#   Game-Service    →  http://localhost:8080
+#   Bot-Service     →  http://localhost:8081
+#   Swagger (game)  →  http://localhost:8080/q/swagger-ui
+#   Swagger (bot)   →  http://localhost:8081/q/swagger-ui
+#   Health (game)   →  http://localhost:8080/q/health
+#   Health (bot)    →  http://localhost:8081/q/health
+#   Metrics (game)  →  http://localhost:8080/q/metrics
+#   Metrics (bot)   →  http://localhost:8081/q/metrics
+#   Jaeger UI       →  http://localhost:16686  (nur mit --profile observability)
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Jaeger — Distributed Tracing UI (Port 16686) ───────────────────────────
+  # Nur mit: docker-compose --profile observability up --build
+  jaeger:
+    profiles: ["observability"]
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC receiver (game-service + bot-service → Jaeger)
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+  # ── Bot-Service (Port 8081) ─────────────────────────────────────────────────
+  bot-service:
+    build:
+      context: modules/bot-service
+    image: eja-chess/bot-service:latest
+    ports:
+      - "8081:8081"
+    environment:
+      QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/q/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ── Game-Service (Port 8080) ────────────────────────────────────────────────
+  game-service:
+    build:
+      context: modules/chess-api
+    image: eja-chess/game-service:latest
+    ports:
+      - "8080:8080"
+    environment:
+      BOT_SERVICE_URL: http://bot-service:8081
+      QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+    depends_on:
+      bot-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/q/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 50s
+
+  # ── Web-UI (Port 5173 → nginx:80) ───────────────────────────────────────────
+  chess-ui:
+    build:
+      context: modules/chess-ui
+    image: eja-chess/chess-ui:latest
+    ports:
+      - "5173:80"
+    depends_on:
+      game-service:
+        condition: service_healthy

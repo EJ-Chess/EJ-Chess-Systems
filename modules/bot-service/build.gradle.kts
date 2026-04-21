@@ -18,13 +18,14 @@ scala {
 dependencies {
     implementation(enforcedPlatform("io.quarkus.platform:quarkus-bom:${versions["QUARKUS"]!!}"))
 
-    // Scala 3 runtime
     implementation("org.scala-lang:scala3-library_3") {
         version { strictly(versions["SCALA3"]!!) }
     }
 
-    // Core: chess domain model (Board, GameController, GameManager, Fen, …)
-    implementation(project(":core"))
+    // Chess domain model (Board, Fen, Color, Square, PieceKind)
+    implementation(project(":core")) {
+        exclude(group = "org.scala-lang", module = "scala-library")
+    }
 
     // Jackson Scala module (Option, Seq, Map support)
     implementation("com.fasterxml.jackson.module:jackson-module-scala_3:2.18.3") {
@@ -39,14 +40,11 @@ dependencies {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
 
-    // Health, OpenAPI, Fault Tolerance
+    // Health + OpenAPI
     implementation("io.quarkus:quarkus-smallrye-health:${versions["QUARKUS"]!!}") {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
     implementation("io.quarkus:quarkus-smallrye-openapi:${versions["QUARKUS"]!!}") {
-        exclude(group = "org.scala-lang", module = "scala-library")
-    }
-    implementation("io.quarkus:quarkus-smallrye-fault-tolerance:${versions["QUARKUS"]!!}") {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
 
@@ -69,12 +67,9 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform {
-        includeEngines("scalatest", "junit-jupiter")
+        includeEngines("scalatest")
         testLogging {
             events("passed", "skipped", "failed")
         }
     }
-    // @QuarkusTest classes must run via ./gradlew :modules:chess-api:quarkusTest
-    // Running them through the standard test task crashes the worker process.
-    exclude("**/controller/**")
 }

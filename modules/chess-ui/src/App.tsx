@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Settings2 } from 'lucide-react'
+import { Settings2, Copy, Check, ChevronRight } from 'lucide-react'
 import { Toaster, toast } from 'sonner'
 import { ChessBoard } from './components/ChessBoard'
 import { GameInfo } from './components/GameInfo'
@@ -47,7 +47,7 @@ export default function App() {
   const [blackTime, setBlackTime] = useState(CLOCK_START)
   const clockIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const isGameOver = gameState?.inCheckmate ?? gameState?.inStalemate ?? false
+  const isGameOver = !!gameState?.inCheckmate || !!gameState?.inStalemate
   const activePlayer = gameState?.currentTurn ?? null
   const clockRunning = !!gameId && !!gameState && !isGameOver
 
@@ -73,6 +73,33 @@ export default function App() {
       if (clockIntervalRef.current) clearInterval(clockIntervalRef.current)
     }
   }, [clockRunning, activePlayer])
+
+  // ── Game-over toasts ──────────────────────────────────────────────────────
+  const prevCheckmateRef = useRef(false)
+  const prevStalemateRef = useRef(false)
+
+  useEffect(() => {
+    const nowCheckmate = !!gameState?.inCheckmate
+    const nowStalemate = !!gameState?.inStalemate
+
+    if (!prevCheckmateRef.current && nowCheckmate) {
+      const winner = gameState!.currentTurn === 'WHITE' ? 'Schwarz' : 'Weiß'
+      toast.success(`Schachmatt — ${winner} gewinnt!`, {
+        description: 'Die Partie ist beendet.',
+        duration: 8000,
+      })
+    }
+
+    if (!prevStalemateRef.current && nowStalemate) {
+      toast('Patt — Unentschieden!', {
+        description: 'Keine legalen Züge — die Partie endet remis.',
+        duration: 8000,
+      })
+    }
+
+    prevCheckmateRef.current = nowCheckmate
+    prevStalemateRef.current = nowStalemate
+  }, [gameState])
 
   // ── Load / refresh game state ─────────────────────────────────────────────
   const refreshGame = useCallback(async (id: string) => {
@@ -121,6 +148,7 @@ export default function App() {
       setLegalMoves([])
       setPgn('')
       setGameState(null)
+      setGameIdExpanded(false)
       setWhiteTime(clockSetting)
       setBlackTime(clockSetting)
       await refreshGame(created.gameId)
@@ -259,6 +287,20 @@ export default function App() {
 
   const currentFen = gameState?.fen ?? ''
 
+  // ── Game ID chip ──────────────────────────────────────────────────────────
+  const [gameIdExpanded, setGameIdExpanded] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const handleGameIdClick = useCallback(() => {
+    if (!gameId) return
+    setGameIdExpanded((prev) => !prev)
+    navigator.clipboard.writeText(gameId).then(() => {
+      setCopied(true)
+      toast('Game ID kopiert!', { description: gameId, duration: 3000 })
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }, [gameId])
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <Toaster position="top-right" richColors theme="dark" />
@@ -302,9 +344,33 @@ export default function App() {
               </h1>
             </button>
             {gameId && (
-              <span className="hidden sm:block text-xs text-zinc-600 font-mono">
-                {gameId.slice(0, 8)}…
-              </span>
+              <button
+                onClick={handleGameIdClick}
+                className="flex items-center gap-1 px-2 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 transition-colors group"
+                title="Game ID kopieren"
+                data-testid="btn-game-id"
+              >
+                {/* klein: nur Icon */}
+                <span className="sm:hidden">
+                  {copied
+                    ? <Check className="h-3.5 w-3.5 text-green-400" />
+                    : <Copy className="h-3.5 w-3.5 text-zinc-400 group-hover:text-zinc-200 transition-colors" />
+                  }
+                </span>
+                {/* ab sm: ID-Text + Chevron + Icon */}
+                <span className="hidden sm:flex items-center gap-1">
+                  <ChevronRight
+                    className={`h-3 w-3 text-zinc-500 transition-transform duration-200 ${gameIdExpanded ? 'rotate-90' : ''}`}
+                  />
+                  <span className="text-xs text-zinc-400 font-mono">
+                    {gameIdExpanded ? gameId : `${gameId.slice(0, 8)}…`}
+                  </span>
+                  {copied
+                    ? <Check className="h-3 w-3 text-green-400 ml-1" />
+                    : <Copy className="h-3 w-3 text-zinc-600 group-hover:text-zinc-400 ml-1 transition-colors" />
+                  }
+                </span>
+              </button>
             )}
           </div>
 

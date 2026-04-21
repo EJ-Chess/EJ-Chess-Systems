@@ -1,6 +1,7 @@
 import { useState, useCallback, CSSProperties } from 'react'
 import { Chessboard } from 'react-chessboard'
 import type { MoveNotation } from '../api/chessApi'
+import { isPawnPromotion } from '../lib/utils'
 
 interface ChessBoardProps {
   position: string
@@ -85,9 +86,8 @@ export function ChessBoard({
         )
 
         if (movesToTarget.length > 0) {
-          const move = movesToTarget[0]
           setSelectedSquare(null)
-          if (move.promotion) {
+          if (isPawnPromotion(position, selectedSquare, square)) {
             setPendingPromotion({ from: selectedSquare, to: square })
           } else {
             await onMove(selectedSquare, square)
@@ -118,12 +118,9 @@ export function ChessBoard({
       )
       if (!isLegal) return false
 
-      const move = legalMoves.find(
-        (m) => m.from === sourceSquare && m.to === targetSquare,
-      )
-
-      if (move?.promotion) {
-        setPendingPromotion({ from: sourceSquare, to: targetSquare })
+      if (isPawnPromotion(position, sourceSquare, targetSquare)) {
+        // react-chessboard will show its promotion modal and call
+        // onPromotionPieceSelect with the chosen piece + square params
         return false
       }
 
@@ -135,14 +132,18 @@ export function ChessBoard({
   )
 
   // react-chessboard expects synchronous boolean from onPromotionPieceSelect.
+  // For drag-and-drop react-chessboard passes promoteFromSquare / promoteToSquare directly.
+  // For click navigation we use our own pendingPromotion state.
   const handlePromotionPieceSelect = useCallback(
-    (piece?: string): boolean => {
-      if (!pendingPromotion || !piece) {
+    (piece?: string, promoteFromSquare?: string, promoteToSquare?: string): boolean => {
+      const from = pendingPromotion?.from ?? promoteFromSquare
+      const to   = pendingPromotion?.to   ?? promoteToSquare
+      if (!from || !to || !piece) {
         setPendingPromotion(null)
         return false
       }
       const promotion = piece.charAt(1).toUpperCase()
-      void onMove(pendingPromotion.from, pendingPromotion.to, promotion)
+      void onMove(from, to, promotion)
       setPendingPromotion(null)
       return false
     },

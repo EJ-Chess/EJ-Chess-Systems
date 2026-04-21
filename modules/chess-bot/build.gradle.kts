@@ -25,11 +25,15 @@ application {
 }
 
 tasks.named<JavaExec>("run") {
-    jvmArgs(
-        "-Dfile.encoding=UTF-8",
-        "-Dstdout.encoding=UTF-8",
-        "--add-modules=javafx.controls,javafx.graphics"
-    )
+    jvmArgs("-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8")
+    doFirst {
+        val javafxJars = configurations.runtimeClasspath.get()
+            .filter { "javafx" in it.name }
+            .joinToString(File.pathSeparator) { it.absolutePath }
+        if (javafxJars.isNotBlank()) {
+            jvmArgs("--module-path", javafxJars, "--add-modules=javafx.controls,javafx.graphics")
+        }
+    }
     standardInput = System.`in`
 }
 
