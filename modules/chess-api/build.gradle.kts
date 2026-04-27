@@ -31,11 +31,14 @@ dependencies {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
 
-    // Quarkus REST
+    // Quarkus REST (server + client)
     implementation("io.quarkus:quarkus-rest:${versions["QUARKUS"]!!}") {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
     implementation("io.quarkus:quarkus-rest-jackson:${versions["QUARKUS"]!!}") {
+        exclude(group = "org.scala-lang", module = "scala-library")
+    }
+    implementation("io.quarkus:quarkus-rest-client-jackson:${versions["QUARKUS"]!!}") {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
 

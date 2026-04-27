@@ -48,7 +48,12 @@ Dauert ~1–2 Minuten. Die Quarkus fast-jars werden unter `build/quarkus-app/` g
 Verzeichnis: Projektroot (EJ-Chess-Systems)
 
 ```bash
-# Ohne Jaeger (Standard — empfohlen für lokale Entwicklung)
+# Alle Container starten (Wenn Web-UI verändert wurde (React))
+docker-compose up --build -d chess-ui
+```
+
+```bash
+# Ohne Jaeger (Standard)
 docker-compose up --build -d
 ```
 
@@ -83,7 +88,7 @@ Verzeichnis: Projektroot (EJ-Chess-Systems)
 
 ```bash
 # Alle Container stoppen & entfernen
-docker-compose down
+docker-compose --profile observability down
 ```
 
 ```bash
@@ -115,7 +120,14 @@ docker-compose logs -f chess-ui
 ### Web-UI (Port 5173)
 ```bash
 cd modules/chess-ui
+```
+
+```bash
+# Nur einmal (nur nochmal wenn sich was updatet)
 npm install
+```
+
+```bash
 npm run dev
 ```
 
@@ -125,6 +137,12 @@ npm run dev
 ```
 
 > Für Bot-Spiele über die Web-UI müssen **Game-Service und Bot-Service gleichzeitig laufen**.
+
+### URL
+
+| URL | Dienst                              |
+|-----|-------------------------------------|
+| http://localhost:8080/q/dev-ui  | Quarkus dev-ui (lokale Entwicklung) |
 
 ---
 
@@ -164,7 +182,8 @@ npm run dev
 | Thema | Datei |
 |-------|-------|
 | Docker & Containerisierung | [docs/readme/docker.md](docs/readme/docker.md) |
-| **Microservices — Code-Showcase** | **[docs/readme/microservices-showcase.md](docs/readme/microservices-showcase.md)** |
+| **Microservices — Abgabe-Übersicht (was wurde gemacht)** | **[docs/readme/microservices-abgabe.md](docs/readme/microservices.md)** |
+| Microservices — Code-Showcase | [docs/readme/microservices-showcase.md](docs/readme/microservices-showcase.md) |
 | Resilience (Health, Circuit Breaker, OpenAPI) | [docs/readme/resilience.md](docs/readme/resilience.md) |
 | Microservice-Architektur (detailliert) | [docs/readme/microservice-approach-a.md](docs/readme/microservice-approach-a.md) |
 | Web-UI Funktionen | [docs/readme/web-ui.md](docs/readme/web-ui.md) |

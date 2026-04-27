@@ -303,7 +303,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <Toaster position="top-right" richColors theme="dark" />
+      <Toaster position="top-left" richColors theme="dark" />
 
       <HomeConfirmDialog
         open={showHomeDialog}
