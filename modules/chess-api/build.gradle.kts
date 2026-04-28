@@ -53,6 +53,20 @@ dependencies {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
 
+    // Persistence: Quarkus JDBC + Slick (FRM)
+    implementation("io.quarkus:quarkus-jdbc-h2:${versions["QUARKUS"]!!}") {
+        exclude(group = "org.scala-lang", module = "scala-library")
+    }
+    implementation("io.quarkus:quarkus-jdbc-postgresql:${versions["QUARKUS"]!!}") {
+        exclude(group = "org.scala-lang", module = "scala-library")
+    }
+    implementation("com.typesafe.slick:slick_3:${versions["SLICK"]!!}") {
+        exclude(group = "org.scala-lang", module = "scala-library")
+        exclude(group = "org.scala-lang.modules", module = "scala-xml_2.13")
+    }
+    implementation("com.h2database:h2:${versions["H2"]!!}")
+    runtimeOnly("org.postgresql:postgresql:${versions["POSTGRESQL"]!!}")
+
     // Observability: Distributed Tracing + Metrics
     implementation("io.quarkus:quarkus-opentelemetry:${versions["QUARKUS"]!!}") {
         exclude(group = "org.scala-lang", module = "scala-library")

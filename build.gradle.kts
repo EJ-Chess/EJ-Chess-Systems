@@ -16,6 +16,9 @@ val versions = mapOf(
     "SCOVERAGE"             to "2.1.1",
     "SCALAFX"               to "21.0.0-R32",
     "JAVAFX"                to "21",
-    "JUNIT_BOM"             to "5.13.4"
+    "JUNIT_BOM"             to "5.13.4",
+    "SLICK"                 to "3.5.2",
+    "H2"                    to "2.2.224",
+    "POSTGRESQL"            to "42.7.4"
 )
 extra["VERSIONS"] = versions

@@ -3,11 +3,17 @@
 # Prerequisites (build Quarkus fast-jars first):
 #   ./gradlew :modules:chess-api:quarkusBuild :modules:bot-service:quarkusBuild
 #
-# Start all services (without Jaeger):
+# Start all services (with H2 in-memory DB, without Jaeger):
 #   docker-compose up --build
+#
+# Start with PostgreSQL persistence:
+#   docker-compose --profile db up --build
 #
 # Start with Distributed Tracing (Jaeger):
 #   docker-compose --profile observability up --build
+#
+# Start with everything:
+#   docker-compose --profile db --profile observability up --build
 #
 # URLs after startup:
 #   Web-UI          →  http://localhost:5173
@@ -20,9 +26,41 @@
 #   Metrics (game)  →  http://localhost:8080/q/metrics
 #   Metrics (bot)   →  http://localhost:8081/q/metrics
 #   Jaeger UI       →  http://localhost:16686  (nur mit --profile observability)
+#   H2 Console      →  http://localhost:8080/h2  (nur im Dev-Mode)
+#   pgAdmin         →  http://localhost:5050     (nur mit --profile db)
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
+
+  # ── PostgreSQL (Port 5432) — nur mit --profile db ──────────────────────────
+  postgres:
+    profiles: ["db"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB:       chess
+      POSTGRES_USER:     chess
+      POSTGRES_PASSWORD: chess
+    ports:
+      - "5432:5432"
+    volumes:
+      - chess-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chess"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── pgAdmin — PostgreSQL Web-UI (Port 5050) ────────────────────────────────
+  pgadmin:
+    profiles: ["db"]
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL:    admin@chess.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
 
   # ── Jaeger — Distributed Tracing UI (Port 16686) ───────────────────────────
   # Nur mit: docker-compose --profile observability up --build
@@ -61,6 +99,11 @@ services:
     environment:
       BOT_SERVICE_URL: http://bot-service:8081
       QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      # PostgreSQL override (active only when --profile db is used)
+      QUARKUS_DATASOURCE_DB_KIND:   ${QUARKUS_DATASOURCE_DB_KIND:-h2}
+      QUARKUS_DATASOURCE_JDBC_URL:  ${QUARKUS_DATASOURCE_JDBC_URL:-jdbc:h2:mem:chess;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}
+      QUARKUS_DATASOURCE_USERNAME:  ${QUARKUS_DATASOURCE_USERNAME:-sa}
+      QUARKUS_DATASOURCE_PASSWORD:  ${QUARKUS_DATASOURCE_PASSWORD:-}
     depends_on:
       bot-service:
         condition: service_healthy
@@ -81,3 +124,6 @@ services:
     depends_on:
       game-service:
         condition: service_healthy
+
+volumes:
+  chess-pgdata:
