@@ -39,9 +39,9 @@ GameRepositorySpec > GameRepository should findAll returns all inserted games  P
 
 - Web-UI: **http://localhost:5173** (separates Terminal: `cd modules/chess-ui && npm run dev`)
 - Swagger UI: **http://localhost:8080/q/swagger-ui**
-- H2 Web-Console: **http://localhost:8080/h2**
+- H2 Web-Console: **http://localhost:8082**
   - JDBC URL: `jdbc:h2:mem:chess`
-  - Benutzer: `sa` / Passwort: leer
+  - Benutzer: `sa` / Passwort: leer lassen
 
 ### Spiel erstellen und Daten in H2 prüfen
 
