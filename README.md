@@ -27,40 +27,26 @@ Entwickelt als verteiltes System bestehend aus mehreren unabhängig deployten Di
 
 ## Dienste lokal starten (Dev-Modus)
 
-> **Reihenfolge beachten:** Bot-Service vor Game-Service starten, damit der Health-Check  
-> beim Startup nicht fehlschlägt.
+### Web-UI + Bot-Spiele (3 Terminals)
 
-### Schritt 1 — Bot-Service (Port 8081)
+> Reihenfolge beachten — Bot-Service muss vor Game-Service laufen.
+
 ```bash
+# Terminal 1 — Bot-Service (Port 8081)
 ./gradlew :modules:bot-service:quarkusDev
 ```
 
-### Schritt 2 — Game-Service (Port 8080)
 ```bash
+# Terminal 2 — Game-Service (Port 8080)
 ./gradlew :modules:chess-api:quarkusDev
 ```
 
-### Schritt 3 — Web-UI (Port 5173)
 ```bash
+# Terminal 3 — Web-UI (Port 5173)
 cd modules/chess-ui
-```
-
-```bash
-# Nur einmal nötig (bzw. nach package.json-Änderungen)
-npm install
-```
-
-```bash
+npm install        # nur einmal nötig
 npm run dev
 ```
-
-### Optional — Desktop-Client (JavaFX)
-```bash
-./gradlew :modules:chess-bot:run
-```
-
-> **Hinweis:** Ohne laufenden Bot-Service antwortet der Bot in der Web-UI nie —  
-> Schwarz bleibt dauerhaft am Zug.
 
 ### Dev-URLs
 
@@ -70,7 +56,18 @@ npm run dev
 | http://localhost:8080/q/swagger-ui | Swagger UI (Game-Service) |
 | http://localhost:8081/q/swagger-ui | Swagger UI (Bot-Service) |
 | http://localhost:8080/q/dev-ui | Quarkus Dev-UI |
-| http://localhost:8082 | H2 Web-Console (nur Dev, siehe unten) |
+| http://localhost:8082 | H2 Web-Console (nur Dev-Modus) |
+
+---
+
+### Desktop-Client (JavaFX) — unabhängig, separat
+
+Der Desktop-Client ist eine **eigenständige JavaFX-App** — völlig unabhängig von Web-UI,
+Game-Service und Bot-Service. Kein anderer Dienst muss dafür laufen.
+
+```bash
+./gradlew :modules:chess-bot:run
+```
 
 ---
 
