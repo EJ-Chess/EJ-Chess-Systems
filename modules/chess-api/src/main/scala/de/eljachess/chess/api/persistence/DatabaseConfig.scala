@@ -34,8 +34,8 @@ class DatabaseConfig:
   @ConfigProperty(name = "quarkus.datasource.username", defaultValue = "sa")
   var username: String = uninitialized
 
-  @ConfigProperty(name = "quarkus.datasource.password", defaultValue = "")
-  var password: String = uninitialized
+  @ConfigProperty(name = "quarkus.datasource.password")
+  var password: java.util.Optional[String] = uninitialized
 
   private[persistence] var _db:      Database    = uninitialized
   private[persistence] var _tables:  Tables      = uninitialized
@@ -46,7 +46,7 @@ class DatabaseConfig:
     try
       _profile = if jdbcUrl.startsWith("jdbc:h2") then H2Profile else PostgresProfile
       _tables  = Tables(_profile)
-      _db      = Database.forURL(jdbcUrl, user = username, password = password)
+      _db      = Database.forURL(jdbcUrl, user = username, password = password.orElse(""))
 
       Await.result(_db.run(_tables.createSchemaAction), 10.seconds)
       log.info("DatabaseConfig: schema ready")

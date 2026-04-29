@@ -37,7 +37,7 @@ class GameRepositorySpec extends AnyFlatSpec with Matchers with BeforeAndAfterEa
       override def profile = H2Profile
       jdbcUrl  = "jdbc:h2:mem:chess_repo_test"
       username = "sa"
-      password = ""
+      password = java.util.Optional.empty()
     val repo = new GameRepository
     repo.dbConfig = cfg
     repo
