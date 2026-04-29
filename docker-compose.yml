@@ -55,7 +55,7 @@ services:
     profiles: ["db"]
     image: dpage/pgadmin4:latest
     environment:
-      PGADMIN_DEFAULT_EMAIL:    admin@chess.local
+      PGADMIN_DEFAULT_EMAIL:    admin@chess.com
       PGADMIN_DEFAULT_PASSWORD: admin
     ports:
       - "5050:80"
@@ -99,11 +99,6 @@ services:
     environment:
       BOT_SERVICE_URL: http://bot-service:8081
       QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
-      # PostgreSQL override (active only when --profile db is used)
-      QUARKUS_DATASOURCE_DB_KIND:   ${QUARKUS_DATASOURCE_DB_KIND:-h2}
-      QUARKUS_DATASOURCE_JDBC_URL:  ${QUARKUS_DATASOURCE_JDBC_URL:-jdbc:h2:mem:chess;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}
-      QUARKUS_DATASOURCE_USERNAME:  ${QUARKUS_DATASOURCE_USERNAME:-sa}
-      QUARKUS_DATASOURCE_PASSWORD:  ${QUARKUS_DATASOURCE_PASSWORD:-}
     depends_on:
       bot-service:
         condition: service_healthy

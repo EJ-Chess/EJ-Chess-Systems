@@ -31,10 +31,13 @@ class GameRepositorySpec extends AnyFlatSpec with Matchers with BeforeAndAfterEa
   // ── Helper: build a minimal repository wired to the test DB ────────────────
   private def makeRepo(): GameRepository =
     val cfg = new DatabaseConfig:
-      override def init(): Unit = ()
+      override def init(event: io.quarkus.runtime.StartupEvent): Unit = ()
       override def db      = GameRepositorySpec.this.db
       override def tables  = GameRepositorySpec.this.tables
       override def profile = H2Profile
+      jdbcUrl  = "jdbc:h2:mem:chess_repo_test"
+      username = "sa"
+      password = ""
     val repo = new GameRepository
     repo.dbConfig = cfg
     repo

@@ -104,10 +104,10 @@ docker-compose up --build -d
 ./gradlew :modules:chess-api:quarkusBuild :modules:bot-service:quarkusBuild
 
 # Schritt 2: Alle Dienste + PostgreSQL + pgAdmin starten
-docker-compose --profile db up --build -d
+docker-compose -f docker-compose.yml -f docker-compose.db.yml --profile db up --build -d
 ```
 
-- pgAdmin: **http://localhost:5050** (admin@chess.local / admin)
+- pgAdmin: **http://localhost:5050** (admin@chess.com / admin)
 - Verbindung in pgAdmin: Host `postgres`, Port `5432`, DB `chess`, User `chess`
 
 ### Persistenz-Nachweis
@@ -120,14 +120,14 @@ docker-compose --profile db up --build -d
 
 ## 6. Was wurde implementiert?
 
-| Datei | Beschreibung |
-|-------|-------------|
-| `persistence/Tables.scala` | Slick `TableQuery[GamesTable]` + alle DBIO-Actions |
-| `persistence/DatabaseConfig.scala` | Wraps Quarkus Agroal DataSource; erkennt H2/Postgres automatisch |
-| `persistence/GameRepository.scala` | CRUD via `Await.result(db.run(...))` |
-| `service/GameService.scala` | Speichert/lädt Spiele; rekonstruiert `GameManager` aus PGN beim Laden |
-| `startup/H2ConsoleStarter.scala` | Startet H2 Web-Console auf Port 8082 im Dev-Modus |
-| `test/.../GameRepositorySpec.scala` | 6 ScalaTest-Tests gegen echte H2-DB |
+| Datei                                                                                                                                           | Beschreibung                                                          |
+|-------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------|
+| [persistence/Tables.scala](../../modules/chess-api/src/main/scala/de/eljachess/chess/api/persistence/Tables.scala)                              | Slick `TableQuery[GamesTable]` + alle DBIO-Actions                    |
+| [persistence/DatabaseConfig.scala](../../modules/chess-api/src/main/scala/de/eljachess/chess/api/persistence/DatabaseConfig.scala)              | Erstellt Slick-DB aus JDBC URL; erkennt H2/Postgres automatisch       |
+| [persistence/GameRepository.scala](../../modules/chess-api/src/main/scala/de/eljachess/chess/api/persistence/GameRepository.scala)              | CRUD via `Await.result(db.run(...))`                                  |
+| [service/GameService.scala](../../modules/chess-api/src/main/scala/de/eljachess/chess/api/service/GameService.scala)                            | Speichert/lädt Spiele; rekonstruiert `GameManager` aus PGN beim Laden |
+| [startup/H2ConsoleStarter.scala](../../modules/chess-api/src/main/scala/de/eljachess/chess/api/startup/H2ConsoleStarter.scala)                  | Startet H2 Web-Console auf Port 8082 im Dev-Modus                     |
+| [test/persistence/GameRepositorySpec.scala](../../modules/chess-api/src/test/scala/de/eljachess/chess/api/persistence/GameRepositorySpec.scala) | 6 ScalaTest-Tests gegen echte H2-DB                                   |
 
 ---
 

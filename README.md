@@ -25,19 +25,23 @@ Entwickelt als verteiltes System bestehend aus mehreren unabhängig deployten Di
 
 ---
 
-## Dienste lokal starten (Dev-Modus)
+## Dienste starten — drei Szenarien
 
-### Web-UI + Bot-Spiele (3 Terminals)
+Wähle das passende Szenario. **Jedes Szenario ist vollständig in sich** — nicht mehrere gleichzeitig ausführen.
 
-> Reihenfolge beachten — Bot-Service muss vor Game-Service laufen.
+---
+
+### Szenario A — Lokal Dev mit H2 (kein Docker)
+
+Drei Terminals öffnen — **Reihenfolge ist wichtig**.
 
 ```bash
-# Terminal 1 — Bot-Service (Port 8081)
+# Terminal 1 — Bot-Service zuerst starten (Port 8081)
 ./gradlew :modules:bot-service:quarkusDev
 ```
 
 ```bash
-# Terminal 2 — Game-Service (Port 8080)
+# Terminal 2 — Game-Service (Port 8080) — erst starten wenn Terminal 1 läuft
 ./gradlew :modules:chess-api:quarkusDev
 ```
 
@@ -48,7 +52,11 @@ npm install        # nur einmal nötig
 npm run dev
 ```
 
-### Dev-URLs
+> **Warum diese Reihenfolge?**  
+> Der Game-Service prüft beim Start ob der Bot-Service erreichbar ist (Health Check).  
+> Läuft der Bot-Service nicht, antwortet der Bot in der Web-UI nie — Schwarz bleibt dauerhaft am Zug.
+
+#### URLs (Szenario A)
 
 | URL | Dienst |
 |-----|--------|
@@ -56,14 +64,142 @@ npm run dev
 | http://localhost:8080/q/swagger-ui | Swagger UI (Game-Service) |
 | http://localhost:8081/q/swagger-ui | Swagger UI (Bot-Service) |
 | http://localhost:8080/q/dev-ui | Quarkus Dev-UI |
-| http://localhost:8082 | H2 Web-Console (nur Dev-Modus) |
+| http://localhost:8082 | H2 Web-Console |
+
+#### H2-Datenbank prüfen (Szenario A)
+
+Unter **http://localhost:8082** einloggen:
+- JDBC URL: `jdbc:h2:mem:chess`
+- Benutzer: `sa`
+- Passwort: *(leer lassen)*
+
+```sql
+-- Anführungszeichen erforderlich — Slick erstellt lowercase-Namen, H2 ist case-sensitiv
+SELECT * FROM "games";
+```
+
+> Die Tabelle ist nach einem Service-Neustart leer — H2 in-memory ist flüchtig.  
+> Für persistente Daten → Szenario C mit PostgreSQL.
 
 ---
 
-### Desktop-Client (JavaFX) — unabhängig, separat
+### Szenario B — Docker mit H2 (kein PostgreSQL, kein pgAdmin)
 
-Der Desktop-Client ist eine **eigenständige JavaFX-App** — völlig unabhängig von Web-UI,
-Game-Service und Bot-Service. Kein anderer Dienst muss dafür laufen.
+Die Web-UI ist im Docker-Image enthalten — **kein `npm run dev` nötig**.
+
+```bash
+# Schritt 1: Quarkus-JARs bauen (einmal, oder nach Code-Änderungen)
+./gradlew :modules:chess-api:quarkusBuild :modules:bot-service:quarkusBuild
+```
+
+```bash
+# Schritt 2: Alle Dienste starten
+docker-compose up --build -d
+```
+
+> **Wann muss Schritt 1 wiederholt werden?**  
+> Die Docker-Images kopieren die lokal gebauten JARs hinein — **nicht** automatisch bei jedem `docker-compose up`.  
+> Schritt 1 ist nötig: erstes Mal, oder nach Code-Änderungen in `chess-api` / `bot-service`.  
+> Nur Docker-/Config-Änderungen? → Nur Schritt 2.
+
+#### URLs (Szenario B)
+
+| URL | Dienst |
+|-----|--------|
+| http://localhost:5173 | Web-UI |
+| http://localhost:8080/q/swagger-ui | API-Dokumentation (Game) |
+| http://localhost:8081/q/swagger-ui | API-Dokumentation (Bot) |
+| http://localhost:8080/q/health | Health Check |
+
+> pgAdmin ist in diesem Szenario **nicht verfügbar** — dafür Szenario C verwenden.
+
+---
+
+### Szenario C — Docker mit PostgreSQL (persistente Daten + pgAdmin)
+
+Die Web-UI ist im Docker-Image enthalten — **kein `npm run dev` nötig**.
+
+```bash
+# Schritt 1: Quarkus-JARs bauen (einmal, oder nach Code-Änderungen)
+./gradlew :modules:chess-api:quarkusBuild :modules:bot-service:quarkusBuild
+```
+
+```bash
+# Schritt 2: Alle Dienste + PostgreSQL + pgAdmin starten
+docker-compose -f docker-compose.yml -f docker-compose.db.yml --profile db up --build -d
+```
+
+> **`--profile db` ist entscheidend** — ohne dieses Flag starten PostgreSQL und pgAdmin **nicht**.  
+> http://localhost:5050 ist nur mit `--profile db` erreichbar.
+
+#### URLs (Szenario C)
+
+| URL | Dienst |
+|-----|--------|
+| http://localhost:5173 | Web-UI |
+| http://localhost:8080/q/swagger-ui | API-Dokumentation (Game) |
+| http://localhost:8081/q/swagger-ui | API-Dokumentation (Bot) |
+| http://localhost:5050 | pgAdmin (admin@chess.com / admin) |
+| http://localhost:8080/q/health | Health Check |
+
+**pgAdmin-Verbindung einrichten:**  
+Host: `postgres` — Port: `5432` — DB: `chess` — User: `chess`
+
+#### Persistenz-Nachweis
+
+1. Web-UI → Bot-Spiel erstellen → `gameId` aus der URL notieren
+2. `docker-compose restart game-service`
+3. Swagger UI → `GET /games/{gameId}/state` → Spiel ist noch vorhanden ✓
+
+---
+
+### Szenario D — Docker mit Jaeger (Distributed Tracing)
+
+```bash
+# Schritt 1: JARs bauen
+./gradlew :modules:chess-api:quarkusBuild :modules:bot-service:quarkusBuild
+
+# Schritt 2: Mit Tracing starten
+docker-compose --profile observability up --build -d
+
+# Oder: PostgreSQL + Tracing kombiniert
+docker-compose --profile db --profile observability up --build -d
+```
+
+| URL | Dienst |
+|-----|--------|
+| http://localhost:16686 | Jaeger Tracing UI |
+
+> Das Jaeger-Image wird beim ersten Start aus dem Internet geladen.
+
+---
+
+### Docker — Dienste stoppen & Logs
+
+```bash
+# Alle Container stoppen & entfernen (alle Profile angeben, die gestartet wurden)
+docker-compose --profile db --profile observability down
+```
+```bash
+# Logs aller Container (live)
+docker-compose logs -f
+```
+```bash
+# Logs eines einzelnen Dienstes
+docker-compose logs -f game-service
+docker-compose logs -f bot-service
+```
+```bash
+# Nur Web-UI neu bauen (nach React-Änderungen, kein JAR-Build nötig)
+docker-compose up --build -d chess-ui
+```
+
+---
+
+## Desktop-Client (JavaFX) — vollständig unabhängig
+
+Der Desktop-Client ist eine **eigenständige JavaFX-App** — kein anderer Dienst muss laufen.  
+Kann jederzeit separat gestartet werden, unabhängig von Web-UI, Game-Service und Bot-Service.
 
 ```bash
 ./gradlew :modules:chess-bot:run
@@ -76,127 +212,12 @@ Game-Service und Bot-Service. Kein anderer Dienst muss dafür laufen.
 Der Game-Service speichert alle Partien in einer Datenbank.  
 Zwei Branches implementieren dasselbe Interface mit unterschiedlichen Technologien:
 
-| Branch | Ansatz | Datenbank (Dev) | Datenbank (Prod) |
-|--------|--------|-----------------|------------------|
+| Branch | Ansatz | Datenbank (Dev/Test) | Datenbank (Prod) |
+|--------|--------|----------------------|------------------|
 | `feature/persistence-approach-a` | **Slick (FRM)** | H2 in-memory | PostgreSQL |
 | `feature/persistence-panache-approach` | **Panache / Hibernate (JPA)** | H2 in-memory | PostgreSQL |
 
-### H2-Datenbank im Dev-Modus prüfen
-
-Nach `./gradlew :modules:chess-api:quarkusDev` ist die H2 Web-Console verfügbar:
-
-**http://localhost:8082**
-- JDBC URL: `jdbc:h2:mem:chess`
-- Benutzer: `sa`
-- Passwort: *(leer lassen)*
-
-Tabelle abfragen (Anführungszeichen erforderlich, da Slick lowercase-Namen erstellt):
-```sql
-SELECT * FROM "games";
-```
-
-> Die Tabelle ist leer nach einem Service-Neustart — H2 in-memory ist flüchtig.  
-> Für persistente Daten → PostgreSQL mit `--profile db` (siehe unten).
-
-### Mit PostgreSQL starten (persistente Daten)
-
-```bash
-# Schritt 1: JARs bauen
-./gradlew :modules:chess-api:quarkusBuild :modules:bot-service:quarkusBuild
-
-# Schritt 2: Alle Dienste + PostgreSQL starten
-docker-compose --profile db up --build -d
-```
-
-Nach dem Neustart des game-service die Partien über `GET /games/{gameId}` abrufen —  
-sie sind noch vorhanden. pgAdmin: **http://localhost:5050** (admin@chess.local / admin)
-
----
-
-## Docker — alle Dienste starten
-
-### Schritt 1: Quarkus-JARs bauen
-
-```bash
-# Verzeichnis: Projektroot (EJ-Chess-Systems)
-./gradlew :modules:chess-api:quarkusBuild :modules:bot-service:quarkusBuild
-```
-
-Dauert ~1–2 Minuten. Die Quarkus fast-jars werden unter `build/quarkus-app/` gebaut.
-
-> **Wann muss Schritt 1 ausgeführt werden?**  
-> Die Docker-Images kopieren die lokal gebauten JARs hinein — **nicht** automatisch bei jedem `docker-compose up`.  
-> Schritt 1 ist nötig wenn:
-> - **erstes Mal** (noch keine JARs vorhanden)
-> - **nach Code-Änderungen** in `chess-api` oder `bot-service`
->
-> Reine Docker- oder Config-Änderungen (z. B. `docker-compose.yml`) brauchen nur Schritt 2.
-
-### Schritt 2: Docker Compose starten
-
-```bash
-# Standard (H2 in-memory, ohne Jaeger)
-docker-compose up --build -d
-```
-
-```bash
-# Mit PostgreSQL (persistente Daten)
-docker-compose --profile db up --build -d
-```
-
-```bash
-# Mit Jaeger / Distributed Tracing
-docker-compose --profile observability up --build -d
-```
-
-```bash
-# Mit allem
-docker-compose --profile db --profile observability up --build -d
-```
-
-```bash
-# Nur Web-UI neu bauen (nach React-Änderungen)
-docker-compose up --build -d chess-ui
-```
-
-Die Container starten detached (`-d`). Ca. 30 Sekunden bis Health Checks grün sind.
-
-> **Hinweis zu Jaeger:** Das Jaeger-Image wird beim ersten Start aus dem Internet geladen.  
-> Ohne Internetzugang einfach ohne `--profile observability` starten.
-
-### Verfügbare URLs
-
-| URL | Dienst |
-|-----|--------|
-| http://localhost:5173 | Web-UI (React SPA) |
-| http://localhost:8080 | Game-Service REST API |
-| http://localhost:8081 | Bot-Service REST API |
-| http://localhost:8080/q/swagger-ui | API-Dokumentation (Game) |
-| http://localhost:8081/q/swagger-ui | API-Dokumentation (Bot) |
-| http://localhost:8080/q/health | Health Check (Game, inkl. bot-service) |
-| http://localhost:8081/q/health | Health Check (Bot) |
-| http://localhost:8080/q/metrics | Prometheus-Metriken (Game) |
-| http://localhost:8081/q/metrics | Prometheus-Metriken (Bot) |
-| http://localhost:16686 | Jaeger — Distributed Tracing UI (nur `--profile observability`) |
-| http://localhost:5050 | pgAdmin — PostgreSQL UI (nur `--profile db`) |
-
-### Dienste stoppen & Logs
-
-```bash
-# Alle Container stoppen & entfernen
-docker-compose --profile observability --profile db down
-```
-
-```bash
-# Logs aller Container streamen (live)
-docker-compose logs -f
-```
-
-```bash
-# Logs nur eines Dienstes
-docker-compose logs -f game-service
-docker-compose logs -f bot-service
-```
+Detaillierte Anleitungen: [docs/readme/persistence-demo.md](docs/readme/persistence-demo.md)
 
 ---
 
@@ -244,6 +265,7 @@ docker-compose logs -f bot-service
 | Microservice-Architektur (detailliert) | [docs/readme/microservice-approach-a.md](docs/readme/microservice-approach-a.md) |
 | Web-UI Funktionen | [docs/readme/web-ui.md](docs/readme/web-ui.md) |
 | **Persistenz — Demo & Anleitung** | **[docs/readme/persistence-demo.md](docs/readme/persistence-demo.md)** |
+| pgAdmin — PostgreSQL Web-UI | [docs/readme/pgadmin.md](docs/readme/pgadmin.md) |
 | **Persistenz — Slick vs. Panache Vergleich** | **[docs/readme/persistence-slick-vs-panache.md](docs/readme/persistence-slick-vs-panache.md)** |
 | Architektur-Entscheidungen (ADRs) | [docs/adr/](docs/adr/) |
 | Offene Probleme | [docs/unresolved.md](docs/unresolved.md) |
