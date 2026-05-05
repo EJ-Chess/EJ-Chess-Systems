@@ -15,18 +15,33 @@ object Fen:
     s"${encodePlacement(board)} $color $castling $ep ${ctrl.halfmoveClock} ${ctrl.fullmoveNumber}"
 
   private def encodePlacement(board: Board): String =
-    (7 to 0 by -1).map { row =>
-      val (rankStr, emptyCount) =
-        (0 to 7).foldLeft(("", 0)) { case ((acc, empty), col) =>
-          board.pieceAt(Square(col, row)) match
-            case None =>
-              (acc, empty + 1)
-            case Some(piece) =>
-              val prefix = if empty > 0 then acc + empty.toString else acc
-              (prefix + pieceChar(piece), 0)
-        }
-      if emptyCount > 0 then rankStr + emptyCount.toString else rankStr
-    }.mkString("/")
+    // Pre-allocate: worst case = 32 pieces + 28 digits + 7 slashes = 71 chars
+    val sb = new java.lang.StringBuilder(71)
+    var row = 7
+    while row >= 0 do
+      if row < 7 then sb.append('/')
+      var col   = 0
+      var empty = 0
+      while col < 8 do
+        board.pieceAt(Square(col, row)) match
+          case None =>
+            empty += 1
+          case Some(Piece(color, kind)) =>
+            if empty > 0 then
+              sb.append(('0' + empty).toChar)
+              empty = 0
+            val base: Char = kind match
+              case PieceKind.King   => 'K'
+              case PieceKind.Queen  => 'Q'
+              case PieceKind.Rook   => 'R'
+              case PieceKind.Bishop => 'B'
+              case PieceKind.Knight => 'N'
+              case PieceKind.Pawn   => 'P'
+            sb.append(if color == Color.White then base else base.toLower)
+        col += 1
+      if empty > 0 then sb.append(('0' + empty).toChar)
+      row -= 1
+    sb.toString
 
   private def pieceChar(piece: Piece): String =
     val c = piece.kind match
