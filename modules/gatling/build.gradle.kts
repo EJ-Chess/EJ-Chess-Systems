@@ -1,6 +1,6 @@
 plugins {
     java
-    id("io.gatling.gradle") version "3.13.5.2"
+    id("io.gatling.gradle") version "3.15.0.1"
 }
 
 repositories {
@@ -18,7 +18,7 @@ gatling {
 }
 
 dependencies {
-    gatling("io.gatling.highcharts:gatling-charts-highcharts:3.13.5") {
+    gatling("io.gatling.highcharts:gatling-charts-highcharts:3.15.0") {
         exclude(group = "org.scala-lang")
     }
 }
