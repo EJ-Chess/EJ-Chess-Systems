@@ -60,20 +60,47 @@ FenEncodeBenchmark.encode  avgt  10  0,709 ± 0,054  us/op
 
 ---
 
-## Summary
+---
 
-| Benchmark           | Before (µs/op) | After (µs/op) | Speedup |
-|---------------------|---------------|--------------|---------|
-| `encode`            | 1.686         | 0.701        | **2.4×** |
-| `roundTrip`         | 7.784         | 6.557        | 1.2×    |
-| `decode`            | 5.662         | ~5.7         | —       |
-| `legalMovesInitial` | 46.789        | ~49          | —       |
+## Proposal A — `Board.legalMoves` optimization (candidate-target pruning)
 
-`encode` is **~2.4× faster** (58 % reduction in average time).  `decode` and
-`legalMovesInitial` are unchanged as expected (different code paths).  Run-to-run
-variance (±1-3 µs for legalMoves) is normal on a non-isolated dev machine.
+**Before:** `legalMoves` iterated all 64 squares as candidate targets for every piece,
+calling `move()` on each (O(pieces × 64) candidate evaluations).
+
+**After:** Added `candidateTargets(from, piece)` that generates only geometrically
+reachable squares per piece type:
+- Knight: 8 L-shape offsets (filtered to board bounds)
+- King: 8 adjacent squares + 2 castling squares (col ±2)
+- Pawn: forward, optional double-step, 2 diagonal captures
+- Rook/Bishop/Queen: ray-walks that stop at the first occupied square (inclusive)
+
+Typical reduction: from 64 candidates to 2–20 candidates per piece.
+
+### After Proposal A (legalMoves candidate pruning)
+
+```
+Benchmark                             Mode  Cnt   Score   Error  Units
+FenEncodeBenchmark.decode             avgt    5   5,317 ± 0,218  us/op
+FenEncodeBenchmark.encode             avgt    5   0,650 ± 0,012  us/op
+FenEncodeBenchmark.legalMovesInitial  avgt    5  18,365 ± 0,177  us/op   ← KEY
+FenEncodeBenchmark.roundTrip          avgt    5   6,353 ± 1,817  us/op
+```
+
+---
+
+## Combined summary — all optimizations
+
+| Benchmark           | Baseline (µs/op) | After encode opt | After legalMoves opt | Total speedup |
+|---------------------|-----------------|------------------|-----------------------|---------------|
+| `encode`            | 1.686           | 0.701            | 0.650                 | **2.6×**      |
+| `legalMovesInitial` | 46.789          | ~49 (unchanged)  | 18.365                | **2.5×**      |
+| `roundTrip`         | 7.784           | 6.557            | 6.353                 | 1.2×          |
+| `decode`            | 5.662           | ~5.7             | 5.317                 | 1.1×          |
+
+`encode` is **~2.6× faster** — StringBuilder removes O(pieces) heap allocations per call.
+`legalMovesInitial` is **~2.5× faster** — candidate pruning cuts from 64 to ~8 targets/piece.
 
 ### Why this matters at API level
-At 10 concurrent users making 1 request/s each, the encode step alone saved
-~10 µs per request.  More importantly, it reduces GC pressure: fewer short-lived
-allocations means fewer minor GC pauses under sustained load.
+`GET /games/{id}/moves` calls `legalMoves` on every request. At 10 VUs the savings per
+request are ~28 µs (legalMoves) + ~1 µs (encode), directly reducing p95 tail latency.
+Fewer allocations also lower GC pressure under sustained load.
