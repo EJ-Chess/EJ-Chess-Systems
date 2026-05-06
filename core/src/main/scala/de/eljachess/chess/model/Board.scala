@@ -70,12 +70,71 @@ case class Board(
   def legalMoves(color: Color): List[(Square, Square)] =
     for
       from <- grid.keys.toList if grid(from).color == color
-      to   <- Square.all
+      to   <- candidateTargets(from, grid(from))
       isBackRankPawn = grid(from).kind == PieceKind.Pawn &&
         ((color == Color.White && to.row == 7) || (color == Color.Black && to.row == 0))
       newBoard <- if isBackRankPawn then move(from, to, Some(PieceKind.Queen)) else move(from, to)
       if !newBoard.isInCheck(color)
     yield (from, to)
+
+  /** Geometrically reachable squares for a piece — far fewer than all 64.
+   *  Legality (check, path clear for sliding pieces) is still enforced by move(). */
+  private def candidateTargets(from: Square, piece: Piece): List[Square] =
+    piece.kind match
+      case PieceKind.Knight => knightCandidates(from)
+      case PieceKind.King   => kingCandidates(from)
+      case PieceKind.Pawn   => pawnCandidates(from, piece.color)
+      case PieceKind.Rook   => slidingCandidates(from, List((1,0),(-1,0),(0,1),(0,-1)))
+      case PieceKind.Bishop => slidingCandidates(from, List((1,1),(1,-1),(-1,1),(-1,-1)))
+      case PieceKind.Queen  =>
+        slidingCandidates(from, List((1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)))
+
+  private def knightCandidates(from: Square): List[Square] =
+    List((-2,-1),(-2,1),(-1,-2),(-1,2),(1,-2),(1,2),(2,-1),(2,1)).collect {
+      case (dc, dr) if from.col+dc >= 0 && from.col+dc < 8 &&
+                       from.row+dr >= 0 && from.row+dr < 8 =>
+        Square(from.col + dc, from.row + dr)
+    }
+
+  private def kingCandidates(from: Square): List[Square] =
+    val adjacent =
+      for dc <- -1 to 1; dr <- -1 to 1
+          if !(dc == 0 && dr == 0)
+          c = from.col + dc; r = from.row + dr
+          if c >= 0 && c < 8 && r >= 0 && r < 8
+      yield Square(c, r)
+    // castling squares — move() validates rights, path, and check
+    val castling = List(from.col - 2, from.col + 2)
+      .filter(c => c >= 0 && c < 8)
+      .map(c => Square(c, from.row))
+    adjacent.toList ++ castling
+
+  private def pawnCandidates(from: Square, color: Color): List[Square] =
+    val dir      = if color == Color.White then 1 else -1
+    val startRow = if color == Color.White then 1 else 6
+    val r1 = from.row + dir
+    if r1 < 0 || r1 > 7 then return Nil
+    val forward       = List(Square(from.col, r1))
+    val doubleForward = if from.row == startRow then List(Square(from.col, from.row + 2*dir)) else Nil
+    // diagonal squares: normal captures + en passant (move() distinguishes)
+    val captures = List(-1, 1).collect {
+      case dc if from.col + dc >= 0 && from.col + dc < 8 => Square(from.col + dc, r1)
+    }
+    forward ++ doubleForward ++ captures
+
+  // Walk each ray and stop after the first occupied square (inclusive).
+  private def slidingCandidates(from: Square, dirs: List[(Int, Int)]): List[Square] =
+    dirs.flatMap { case (dc, dr) =>
+      val ray = scala.collection.mutable.ListBuffer.empty[Square]
+      var c = from.col + dc; var r = from.row + dr
+      var blocked = false
+      while c >= 0 && c < 8 && r >= 0 && r < 8 && !blocked do
+        val sq = Square(c, r)
+        ray += sq
+        if grid.contains(sq) then blocked = true
+        c += dc; r += dr
+      ray.toList
+    }
 
   private def updatedCastlingRights(from: Square, to: Square, piece: Piece): CastlingRights =
     var r = castlingRights
@@ -98,6 +157,7 @@ case class Board(
     r
 
   private def castlingMove(from: Square, to: Square, color: Color): Option[Board] =
+    if to.row != from.row then return None   // castling must stay on the same rank
     val kingside = to.col > from.col
     val hasRight = (color, kingside) match
       case (Color.White, true)  => castlingRights.whiteKingside

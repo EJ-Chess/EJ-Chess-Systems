@@ -640,3 +640,49 @@ class BoardSpec extends AnyFlatSpec with Matchers:
     val dests = b.legalMoves(Color.White).map(_._2)
     dests should contain (Square(4, 7))
   }
+
+  "Board.legalMoves (candidate optimisation)" should "return exactly 20 moves from initial position for White" in {
+    Board.initial.legalMoves(Color.White) should have size 20
+  }
+
+  it should "return exactly 20 moves from initial position for Black" in {
+    Board.initial.legalMoves(Color.Black) should have size 20
+  }
+
+  it should "include all 4 knight moves from initial position" in {
+    val moves = Board.initial.legalMoves(Color.White)
+    moves should contain (Square(1, 0) -> Square(0, 2))
+    moves should contain (Square(1, 0) -> Square(2, 2))
+    moves should contain (Square(6, 0) -> Square(5, 2))
+    moves should contain (Square(6, 0) -> Square(7, 2))
+  }
+
+  it should "not generate moves that leave the king in check" in {
+    // Pinned rook: white king e1, white rook e2, black queen e8, black king h8
+    // Queen has a clear line along the e-file; moving rook off e-file exposes white king
+    val g = Map(
+      Square(4, 0) -> Piece(Color.White, PieceKind.King),
+      Square(4, 1) -> Piece(Color.White, PieceKind.Rook),
+      Square(4, 7) -> Piece(Color.Black, PieceKind.Queen),
+      Square(7, 7) -> Piece(Color.Black, PieceKind.King)
+    )
+    val moves = Board(g).legalMoves(Color.White)
+    // Rook must stay on e-file (pinned); no lateral rook moves allowed
+    moves.filter(_._1 == Square(4, 1)).foreach { case (_, to) =>
+      to.col shouldBe 4
+    }
+  }
+
+  it should "produce identical results to Square.all brute-force on a complex position" in {
+    // Ruy Lopez after 3 moves — verifies candidate pruning doesn't miss any move
+    Fen.decode("r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4") match
+      case Left(err)   => fail(err)
+      case Right(ctrl) =>
+        val optimised  = ctrl.board.legalMoves(Color.White).toSet
+        val bruteForce = Square.all.flatMap { to =>
+          ctrl.board.grid.keys.filter(ctrl.board.grid(_).color == Color.White).flatMap { from =>
+            ctrl.board.move(from, to).filter(!_.isInCheck(Color.White)).map(_ => from -> to)
+          }
+        }.toSet
+        optimised shouldBe bruteForce
+  }
