@@ -10,7 +10,6 @@ import jakarta.inject.Inject
 import scala.compiletime.uninitialized
 import java.util.UUID
 import scala.collection.concurrent.TrieMap
-import scala.collection.mutable
 
 /** Per-game bot configuration (stored alongside the GameManager). */
 private case class BotConfig(botColor: Color, elo: Int)
@@ -24,7 +23,7 @@ class GameService:
   /** Null in unit tests (no CDI). All persist/load calls are guarded. */
   @Inject var repository: GameRepository = uninitialized
 
-  private val games:      mutable.Map[String, GameManager] = mutable.Map.empty
+  private val games:      TrieMap[String, GameManager] = TrieMap.empty
   private val botConfigs: TrieMap[String, BotConfig]       = TrieMap.empty
 
   // ── Public API ─────────────────────────────────────────────────────────────

@@ -82,3 +82,11 @@ case class ImportResponse(
   moveCount: Option[Int] = None,
   error: Option[String] = None
 )
+
+// Bulk Game Operations
+case class BulkGameResult(
+  total: Int,
+  successful: Int,
+  failed: Int,
+  durationMs: Long
+)

@@ -24,3 +24,8 @@ case class MakeMoveRequest(
 case class UndoRequest()
 
 case class RedoRequest()
+
+// Bulk operations
+case class BulkGameRequest(
+  count: Int
+)

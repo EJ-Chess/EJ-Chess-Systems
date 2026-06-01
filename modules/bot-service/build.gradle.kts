@@ -56,6 +56,14 @@ dependencies {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
 
+    // Reactive Streams: Pekko (Apache-licensed Akka fork)
+    implementation("org.apache.pekko:pekko-stream_3:1.1.2") {
+        exclude(group = "org.scala-lang", module = "scala-library")
+    }
+    implementation("org.apache.pekko:pekko-actor_3:1.1.2") {
+        exclude(group = "org.scala-lang", module = "scala-library")
+    }
+
     // Testing
     testImplementation("io.quarkus:quarkus-junit5:${versions["QUARKUS"]!!}")
     testImplementation("io.rest-assured:rest-assured:5.4.0") {

@@ -75,6 +75,14 @@ dependencies {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
 
+    // fs2 + cats-effect for bulk game lifecycle streaming (production)
+    implementation("co.fs2:fs2-core_3:3.11.0") {
+        exclude(group = "org.scala-lang", module = "scala-library")
+    }
+    implementation("org.typelevel:cats-effect_3:3.5.7") {
+        exclude(group = "org.scala-lang", module = "scala-library")
+    }
+
     // Testing
     testImplementation("io.quarkus:quarkus-junit5:${versions["QUARKUS"]!!}")
     testImplementation("io.rest-assured:rest-assured:5.4.0") {
