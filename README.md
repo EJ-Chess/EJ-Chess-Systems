@@ -302,6 +302,8 @@ Detaillierte Anleitungen: [docs/readme/persistence-demo.md](docs/readme/persiste
 | **Persistenz — Demo & Anleitung** | **[docs/readme/persistence-demo.md](docs/readme/persistence-demo.md)** |
 | pgAdmin — PostgreSQL Web-UI | [docs/readme/pgadmin.md](docs/readme/pgadmin.md) |
 | **Persistenz — Slick vs. Panache Vergleich** | **[docs/readme/persistence-slick-vs-panache.md](docs/readme/persistence-slick-vs-panache.md)** |
+| **Streams erklärt — Präsentation (Pekko + FS2)** | **[docs/readme/STREAMS_PRESENTATION.md](docs/readme/STREAMS_PRESENTATION.md)** |
+| Reactive Streams Implementation | [docs/readme/REACTIVE_STREAMS_IMPLEMENTATION.md](docs/readme/REACTIVE_STREAMS_IMPLEMENTATION.md) |
 | Architektur-Entscheidungen (ADRs) | [docs/adr/](docs/adr/) |
 | Offene Probleme | [docs/unresolved.md](docs/unresolved.md) |
 
