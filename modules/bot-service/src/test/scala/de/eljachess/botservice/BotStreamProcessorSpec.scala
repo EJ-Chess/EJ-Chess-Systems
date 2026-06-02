@@ -49,12 +49,12 @@ class BotStreamProcessorSpec extends AnyFlatSpec with Matchers:
     processor.shutdown()
   }
 
-  it should "drop requests when the queue is full (buffer size = 200)" in {
+  it should "drop requests when the queue is full (buffer size = 500)" in {
     val processor = BotStreamProcessor()
     val req = BotMoveRequest(fen = initialFen, color = "white", elo = 1400)
 
     // Flood the queue with more requests than the buffer can hold
-    val futures = (1 to 300).map(_ => processor.enqueue(req))
+    val futures = (1 to 600).map(_ => processor.enqueue(req))
 
     // Wait for all to complete
     val results = futures.map(f => Await.result(f, 5.seconds))

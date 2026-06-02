@@ -11,10 +11,10 @@
 ## 🎯 Warum verschiedene Technologien?
 
 ### Pekko Streams (bot-service)
-- **Problem:** Bot-Anfragen können schneller ankommen als verarbeitet werden
-- **Lösung:** Bounded Queue (200 requests) mit Backpressure
+- **Problem:** Bot-Anfragen können schneller ankommen als verarbeitet werden (Turnier: 12 teams × 50+ moves = 6000+ requests)
+- **Lösung:** Bounded Queue (500 requests) mit Backpressure
 - **Behavior:** Überschüssige Anfragen → HTTP 503 "Service overloaded"
-- **Parallelism:** 4 concurrent move computations
+- **Parallelism:** 8 concurrent move computations (tuned for 8-core CPUs)
 
 ### fs2 Streams (gatling — Load-Tests)
 - **Problem:** Performance-Tests mit vielen concurrent HTTP-Requests
@@ -664,17 +664,18 @@ import org.apache.pekko.stream.scaladsl.Source      // nicht: akka.stream
 
 ### Bot-Service Tuning
 
-**Buffer-Größe:** `BotStreamProcessor.scala:35`
+**Buffer-Größe:** `BotStreamProcessor.scala:34`
 ```scala
-.queue[QueueElement](bufferSize = 200, OverflowStrategy.dropNew)
+.queue[QueueElement](bufferSize = 500, OverflowStrategy.dropNew)
 ```
-→ Ändern auf: `.queue(...bufferSize = 500...)` für höhere Last
+→ Für noch höhere Last (100+ concurrent): `bufferSize = 1000`
 
-**Parallelism:** `BotStreamProcessor.scala:39`
+**Parallelism:** `BotStreamProcessor.scala:35`
 ```scala
-.mapAsync(parallelism = 4)
+.mapAsync(parallelism = 8)
 ```
-→ Auf 8-core-Maschine: `parallelism = 8` für höhere Throughput
+→ Auf 4-core-Maschine: reduzieren auf `parallelism = 4`
+→ Auf 16-core-Maschine: erhöhen auf `parallelism = 16`
 
 ### Gatling Load-Test Tuning
 

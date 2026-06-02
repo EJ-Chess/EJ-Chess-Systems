@@ -18,10 +18,12 @@ private case class QueueElement(
 /**
  * Bounded request queue for bot move computations with backpressure.
  *
- * When more than 200 requests arrive simultaneously, excess requests are dropped
+ * Configured for tournament scenario: 12 teams × 50-60 moves/game = 6000+ concurrent requests.
+ * When more than 500 requests arrive simultaneously, excess requests are dropped
  * (OverflowStrategy.dropNew), and the caller receives None, which maps to HTTP 503.
  *
- * Each request is processed by BotEngine.bestMove in parallel (parallelism = 4).
+ * Each request is processed by BotEngine.bestMove in parallel (parallelism = 8).
+ * Parallelism tuned for modern 8-core CPUs.
  */
 @ApplicationScoped
 class BotStreamProcessor:
@@ -31,8 +33,8 @@ class BotStreamProcessor:
 
   private val (queue, _) =
     Source
-      .queue[QueueElement](bufferSize = 200, OverflowStrategy.dropNew)
-      .mapAsync(parallelism = 4) { elem =>
+      .queue[QueueElement](bufferSize = 500, OverflowStrategy.dropNew)
+      .mapAsync(parallelism = 8) { elem =>
         Future {
           val color = if elem.request.color.toLowerCase == "black" then Color.Black else Color.White
           val result = BotEngine.bestMove(elem.request.fen, color, elem.request.elo)
