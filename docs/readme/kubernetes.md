@@ -8,7 +8,7 @@ Diese Anleitung erklärt, wie die EJa Chess Services auf `aim-chess-2` mit k3s (
 
 SSH auf den Server:
 ```bash
-ssh chess@aim-chess-2
+ssh chess@141.37.74.141
 ```
 
 k3s installieren:
@@ -61,7 +61,7 @@ docker build -t eja-chess/chess-ui:latest .
 ```bash
 # Lokal: Alle drei Images in eine Datei packen und mit gzip komprimieren
 docker save eja-chess/game-service:latest eja-chess/bot-service:latest eja-chess/chess-ui:latest \
-  | gzip | ssh chess@aim-chess-2 "gunzip | sudo k3s ctr images import -"
+  | gzip | ssh chess@141.37.74.141 "gunzip | sudo k3s ctr images import -"
 ```
 
 Das kann 1-2 Minuten dauern. Wenn es fertig ist, seid ihr fertig mit den Images.
@@ -72,7 +72,7 @@ Das kann 1-2 Minuten dauern. Wenn es fertig ist, seid ihr fertig mit den Images.
 
 SSH auf dem Server (falls noch nicht verbunden):
 ```bash
-ssh chess@aim-chess-2
+ssh chess@141.37.74.141
 ```
 
 Manifest-Verzeichnis vom Git clonen oder hochladen. Annahme: die `k8s/` Verzeichnis-Struktur existiert auf dem Server unter `~/chess-manifests/`:
@@ -151,12 +151,12 @@ Außerhalb des Servers (z.B. vom eigenen Laptop über VPN):
 
 **Web-UI:**
 ```
-http://<server-ip-oder-hostname>:30080
+http://141.37.74.141:30080
 ```
 
 **pgAdmin** (optional):
 ```
-http://<server-ip-oder-hostname>:30050
+http://141.37.74.141:30050
 ```
 Anmeldung: `admin@chess.com` / `admin`
 
@@ -216,12 +216,12 @@ Wenn ihr Code ändert:
 2. **Neue Images zum Server:**
    ```bash
    docker save eja-chess/game-service:latest eja-chess/bot-service:latest eja-chess/chess-ui:latest \
-     | gzip | ssh chess@aim-chess-2 "gunzip | sudo k3s ctr images import -"
+     | gzip | ssh chess@141.37.74.141 "gunzip | sudo k3s ctr images import -"
    ```
 
 3. **Pods neu starten (damit die neuen Images geladen werden):**
    ```bash
-   ssh chess@aim-chess-2
+   ssh chess@141.37.74.141
    kubectl rollout restart deployment/game-service -n chess
    kubectl rollout restart deployment/bot-service -n chess
    kubectl rollout restart deployment/chess-ui -n chess

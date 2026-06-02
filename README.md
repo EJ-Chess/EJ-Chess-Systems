@@ -200,8 +200,8 @@ kubectl apply -f k8s/
 
 | URL | Dienst |
 |-----|--------|
-| http://aim-chess-2-IP:30080 | Web-UI (über VPN) |
-| http://aim-chess-2-IP:30050 | pgAdmin (optional, über VPN) |
+| http://141.37.74.141:30080 | Web-UI (über VPN) |
+| http://141.37.74.141:30050 | pgAdmin (optional, über VPN) |
 
 **Vollständige Anleitung:** [docs/readme/kubernetes.md](docs/readme/kubernetes.md)
 
