@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bot-service
+  namespace: chess
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bot-service
+  template:
+    metadata:
+      labels:
+        app: bot-service
+    spec:
+      containers:
+      - name: bot-service
+        image: eja-chess/bot-service:latest
+        imagePullPolicy: Never  # k3s uses local images only
+        ports:
+        - containerPort: 8081
+          name: http
+        env:
+        - name: QUARKUS_OTEL_SDK_DISABLED
+          value: "true"
+        readinessProbe:
+          httpGet:
+            path: /q/health/ready
+            port: 8081
+          initialDelaySeconds: 40
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /q/health/ready
+            port: 8081
+          initialDelaySeconds: 45
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /q/health/ready
+            port: 8081
+          failureThreshold: 10
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

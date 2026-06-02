@@ -174,6 +174,41 @@ docker-compose --profile db --profile observability up --build -d
 
 ---
 
+### Szenario E — Kubernetes (k3s) auf dem Uni-Server
+
+Die komplette Platform läuft auf `aim-chess-2` als Kubernetes-Cluster (k3s).
+
+```bash
+# Schritt 1: JARs und Docker Images lokal bauen
+./gradlew :modules:chess-api:quarkusBuild :modules:bot-service:quarkusBuild
+cd modules/chess-api && docker build -t eja-chess/game-service:latest .
+cd ../bot-service && docker build -t eja-chess/bot-service:latest .
+cd ../chess-ui && docker build -t eja-chess/chess-ui:latest .
+
+# Schritt 2: Images zum Server übertragen (lokal auf eurem Rechner)
+docker save eja-chess/game-service:latest eja-chess/bot-service:latest eja-chess/chess-ui:latest \
+  | gzip | ssh chess@aim-chess-2 "gunzip | sudo k3s ctr images import -"
+
+# Schritt 3: k3s auf dem Server installieren (auf dem Server!)
+# Siehe: docs/readme/kubernetes.md — "Schritt 1"
+
+# Schritt 4: Manifeste anwenden (auf dem Server!)
+kubectl apply -f k8s/
+```
+
+#### URLs (Szenario E)
+
+| URL | Dienst |
+|-----|--------|
+| http://aim-chess-2-IP:30080 | Web-UI (über VPN) |
+| http://aim-chess-2-IP:30050 | pgAdmin (optional, über VPN) |
+
+**Vollständige Anleitung:** [docs/readme/kubernetes.md](docs/readme/kubernetes.md)
+
+> Szenario E ermöglicht mehreren Teamkollegen gleichzeitig über VPN zu spielen. Die Datenbank läuft persistent auf dem Server.
+
+---
+
 ### Docker — Dienste stoppen & Logs
 
 ```bash

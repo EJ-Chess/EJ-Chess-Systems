@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chess-config
+  namespace: chess
+data:
+  BOT_SERVICE_URL: "http://bot-service:8081"
+  QUARKUS_DATASOURCE_JDBC_URL: "jdbc:postgresql://postgres:5432/chess"
+  QUARKUS_DATASOURCE_USERNAME: "chess"
