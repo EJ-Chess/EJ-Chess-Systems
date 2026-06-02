@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: game-service
-        image: eja-chess/game-service:latest
+        image: eljachess/chess-api:latest
         imagePullPolicy: Never  # k3s uses local images only
         ports:
         - containerPort: 8080
