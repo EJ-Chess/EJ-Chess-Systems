@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: bot-service
-        image: eja-chess/bot-service:latest
+        image: eljachess/bot-service:latest
         imagePullPolicy: Never  # k3s uses local images only
         ports:
         - containerPort: 8081

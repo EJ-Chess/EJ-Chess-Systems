@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: chess-ui
-        image: eja-chess/chess-ui:latest
+        image: eljachess/chess-ui:latest
         imagePullPolicy: Never  # k3s uses local images only
         ports:
         - containerPort: 80
