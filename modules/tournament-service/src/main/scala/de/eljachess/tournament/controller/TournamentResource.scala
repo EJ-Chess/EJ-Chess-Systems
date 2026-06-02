@@ -1,5 +1,6 @@
 package de.eljachess.tournament.controller
 
+import de.eljachess.tournament.auth.JwtHandler
 import de.eljachess.tournament.dto.{CreateTournamentRequest, Tournament, TournamentInfo, Ok, Error}
 import de.eljachess.tournament.service.TournamentService
 import jakarta.inject.Inject
@@ -23,7 +24,7 @@ class TournamentResource:
     @HeaderParam("Authorization") auth: String,
     req: CreateTournamentRequest
   ): Response =
-    extractBotId(auth) match
+    JwtHandler.extractUserId(auth) match
       case None => Response.status(401).entity(Error("missing or invalid token")).build()
       case Some(directorId) =>
         service.createTournament(req, directorId) match
@@ -43,7 +44,7 @@ class TournamentResource:
     @PathParam("id") id: String,
     @HeaderParam("Authorization") auth: String
   ): Response =
-    extractBotId(auth) match
+    JwtHandler.extractUserId(auth) match
       case None => Response.status(401).entity(Error("missing or invalid token")).build()
       case Some(directorId) =>
         service.findTournament(id) match
@@ -62,7 +63,7 @@ class TournamentResource:
     @PathParam("id") id: String,
     @HeaderParam("Authorization") auth: String
   ): Response =
-    extractBotId(auth) match
+    JwtHandler.extractUserId(auth) match
       case None => Response.status(401).entity(Error("missing or invalid token")).build()
       case Some(directorId) =>
         service.startTournament(id, directorId) match
@@ -70,12 +71,6 @@ class TournamentResource:
           case Left(e)  => handleError(e)
 
   // ── Helper methods ──────────────────────────────────────────────────────
-
-  private def extractBotId(auth: String): Option[String] =
-    Option(auth)
-      .filter(_.startsWith("Bearer "))
-      .map(_.stripPrefix("Bearer ").trim)
-      .filter(_.nonEmpty)
 
   private def handleError(error: String): Response =
     if error.startsWith("400:") then

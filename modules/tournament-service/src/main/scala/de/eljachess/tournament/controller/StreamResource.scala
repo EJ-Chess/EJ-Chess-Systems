@@ -1,5 +1,6 @@
 package de.eljachess.tournament.controller
 
+import de.eljachess.tournament.auth.JwtHandler
 import de.eljachess.tournament.dto.Error
 import de.eljachess.tournament.service.{TournamentService, TournamentStreamService}
 import jakarta.inject.Inject
@@ -20,7 +21,7 @@ class StreamResource:
     @PathParam("id") id: String,
     @HeaderParam("Authorization") auth: String
   ): Response =
-    extractBotId(auth) match
+    JwtHandler.extractUserId(auth) match
       case None => Response.status(401).entity(Error("missing or invalid token")).build()
       case Some(_) =>
         service.findTournament(id) match
@@ -32,10 +33,3 @@ class StreamResource:
               writer.close()
             Response.ok(output).build()
 
-  // ── Helper methods ──────────────────────────────────────────────────────
-
-  private def extractBotId(auth: String): Option[String] =
-    Option(auth)
-      .filter(_.startsWith("Bearer "))
-      .map(_.stripPrefix("Bearer ").trim)
-      .filter(_.nonEmpty)

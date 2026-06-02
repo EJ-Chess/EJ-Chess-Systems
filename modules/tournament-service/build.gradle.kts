@@ -36,11 +36,14 @@ dependencies {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
 
-    // Health, OpenAPI, Fault Tolerance
+    // Health, OpenAPI, JWT
     implementation("io.quarkus:quarkus-smallrye-health:${versions["QUARKUS"]!!}") {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
     implementation("io.quarkus:quarkus-smallrye-openapi:${versions["QUARKUS"]!!}") {
+        exclude(group = "org.scala-lang", module = "scala-library")
+    }
+    implementation("io.quarkus:quarkus-smallrye-jwt:${versions["QUARKUS"]!!}") {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
 

@@ -242,12 +242,26 @@ curl -H "Authorization: Bearer bot1" \
 
 ## Authentication
 
-Simple token-based auth for development:
-- **Bearer token format**: `Authorization: Bearer <user_id>`
-- **Director**: Creates and starts tournaments (checked at `/start` endpoint)
-- **Bot**: Joins tournaments and participates (checked at `/join` and `/stream`)
+JWT Bearer tokens (RFC 7519):
+- **Bearer token format**: `Authorization: Bearer <JWT>`
+- **Token subject (`sub` claim)**: User ID (director or bot)
+- **Issuer (`iss` claim)**: `https://nowchess.local`
 
-⚠️ **Note**: This is a placeholder implementation for academic/development use. Production deployments should use JWT or OAuth2.
+**Example JWT Payload:**
+```json
+{
+  "sub": "bot1",
+  "iss": "https://nowchess.local",
+  "iat": 1717338000,
+  "exp": 1717341600
+}
+```
+
+For development, JwtHandler extracts the `sub` claim from the token payload (base64url-decoded). In production, use a proper JWT library with public key validation and full signature verification.
+
+**Authorization Rules:**
+- **Director**: Can create tournaments (`POST /api/tournament`) and start tournaments (`POST /api/tournament/{id}/start`)
+- **Bot**: Can join tournaments (`POST /api/tournament/{id}/join`), withdraw, and stream events (`GET /api/tournament/{id}/stream`)
 
 ## Known Issues & Limitations
 
