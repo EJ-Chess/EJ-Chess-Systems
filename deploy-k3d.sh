@@ -27,6 +27,17 @@ else
     echo "✓ k3d already installed"
 fi
 
+# 3b. kubectl installieren (falls nicht vorhanden)
+if ! command -v kubectl &> /dev/null; then
+    echo "Installing kubectl..."
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    chmod +x kubectl
+    mv kubectl ~/.local/bin/
+    echo "✓ kubectl installed to ~/.local/bin/kubectl"
+else
+    echo "✓ kubectl already installed"
+fi
+
 # 4. k3d Cluster erstellen
 echo "Creating k3d cluster 'eljachess'..."
 k3d cluster create eljachess \
@@ -54,14 +65,14 @@ docker save eljachess/chess-api:latest eljachess/bot-service:latest eljachess/ch
 
 # 8. Kubernetes Manifeste anwenden
 echo "Applying Kubernetes manifests..."
-kubectl apply -f k8s/
+~/.local/bin/kubectl apply -f k8s/
 
 # 9. Status prüfen
 echo ""
 echo "Waiting for pods to be ready (this may take 1-2 minutes)..."
 sleep 15
-kubectl get pods -n chess-systems
-kubectl get svc -n chess-systems
+~/.local/bin/kubectl get pods -n chess-systems
+~/.local/bin/kubectl get svc -n chess-systems
 
 echo ""
 echo "========================================="
