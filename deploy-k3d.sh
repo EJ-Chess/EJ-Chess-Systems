@@ -31,8 +31,8 @@ fi
 echo "Creating k3d cluster 'eljachess'..."
 k3d cluster create eljachess \
     --agents 2 \
-    --ports "30080:30080@loadbalancer" \
-    --ports "30050:30050@loadbalancer" \
+    -p "30080:30080@loadbalancer" \
+    -p "30050:30050@loadbalancer" \
     || echo "Cluster might already exist, continuing..."
 
 # 5. kubeconfig setzen
