@@ -1,0 +1,23 @@
+version: '3.8'
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik-proxy
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:8080"
+      - "--entrypoints.websecure.address=:8443"
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+      - "9090:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik-network
+    restart: unless-stopped
+networks:
+  traefik-network:
+    driver: bridge

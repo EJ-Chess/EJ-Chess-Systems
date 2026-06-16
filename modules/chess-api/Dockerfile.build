@@ -1,0 +1,25 @@
+# Multi-stage Build für chess-api (mit Gradle im Container)
+
+# Stage 1: Build mit Gradle
+FROM gradle:8-jdk21 AS builder
+WORKDIR /build
+
+# Kopiere alle Projekt-Dateien (Gradle config + alle Module)
+COPY . .
+
+# Baue Quarkus fast-jar
+RUN ./gradlew :modules:chess-api:quarkusBuild --no-daemon
+
+# Stage 2: Runtime
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+
+# Kopiere pre-built JAR aus Builder
+COPY --from=builder /build/modules/chess-api/build/quarkus-app/ ./
+
+# User chess
+RUN addgroup -g 1001 -S chess && adduser -u 1001 -S chess -G chess
+USER chess
+
+EXPOSE 8080
+CMD ["java", "-jar", "quarkus-run.jar"]

@@ -1,0 +1,25 @@
+# Multi-stage Build für bot-service (mit Gradle im Container)
+
+# Stage 1: Build mit Gradle
+FROM gradle:8-jdk21 AS builder
+WORKDIR /build
+
+# Kopiere alle Projekt-Dateien (Gradle config + alle Module)
+COPY . .
+
+# Baue Quarkus fast-jar
+RUN ./gradlew :modules:bot-service:quarkusBuild --no-daemon
+
+# Stage 2: Runtime
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+
+# Kopiere pre-built JAR aus Builder
+COPY --from=builder /build/modules/bot-service/build/quarkus-app/ ./
+
+# User chess
+RUN addgroup -g 1001 -S chess && adduser -u 1001 -S chess -G chess
+USER chess
+
+EXPOSE 8081
+CMD ["java", "-jar", "quarkus-run.jar"]
