@@ -1,0 +1,16 @@
+gameId,playerName,playerColor,winner,botElo,moveCount
+game-001,Alice,white,white,1200,24
+game-002,Bob,black,black,1400,32
+game-003,Alice,white,draw,1500,58
+game-004,Charlie,white,white,1300,18
+game-005,Bob,black,white,1100,14
+game-006,Alice,black,black,1600,41
+game-007,Charlie,white,white,1200,22
+game-008,Bob,white,white,1400,28
+game-009,Alice,white,white,1500,35
+game-010,Charlie,black,black,1300,19
+game-011,Diana,white,white,1100,15
+game-012,Diana,black,draw,1200,67
+game-013,Alice,black,white,1400,38
+game-014,Bob,white,black,1600,44
+game-015,Charlie,white,white,1000,12
