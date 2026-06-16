@@ -64,6 +64,11 @@ dependencies {
         exclude(group = "org.scala-lang", module = "scala-library")
     }
 
+    // Kafka client (Producer + Consumer API — used by KafkaBotConsumer)
+    implementation("org.apache.kafka:kafka-clients:3.7.0") {
+        exclude(group = "org.scala-lang", module = "scala-library")
+    }
+
     // Testing
     testImplementation("io.quarkus:quarkus-junit5:${versions["QUARKUS"]!!}")
     testImplementation("io.rest-assured:rest-assured:5.4.0") {

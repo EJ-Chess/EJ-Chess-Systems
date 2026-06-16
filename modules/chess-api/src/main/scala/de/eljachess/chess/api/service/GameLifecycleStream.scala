@@ -24,6 +24,8 @@ class GameLifecycleStream:
    *
    * Returns a summary with total, successful, failed counts and duration.
    */
+
+  // FS2
   def runBulk(count: Int): IO[BulkGameResult] =
     val start = IO.realTimeInstant
     Stream

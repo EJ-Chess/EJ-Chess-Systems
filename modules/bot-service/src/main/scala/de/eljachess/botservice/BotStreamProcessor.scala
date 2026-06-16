@@ -28,6 +28,7 @@ private case class QueueElement(
 @ApplicationScoped
 class BotStreamProcessor:
 
+  // Pekko
   private given system: ActorSystem = ActorSystem("bot-stream")
   private given ec: ExecutionContext = system.dispatcher
 

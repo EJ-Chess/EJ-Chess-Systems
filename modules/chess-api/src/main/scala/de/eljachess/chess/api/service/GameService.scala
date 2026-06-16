@@ -1,7 +1,7 @@
 package de.eljachess.chess.api.service
 
-import de.eljachess.chess.api.client.BotClient
 import de.eljachess.chess.api.dto.{CreateGameRequest, GameStateResponse, MoveNotation}
+import de.eljachess.chess.api.kafka.BotMoveKafkaProducer
 import de.eljachess.chess.api.persistence.{GameRepository, GameRow}
 import de.eljachess.chess.controller.{GameController, GameManager, SanDecoder}
 import de.eljachess.chess.model.{Board, Color, Fen, PieceKind, Pgn, Square}
@@ -18,7 +18,7 @@ private case class BotConfig(botColor: Color, elo: Int)
 class GameService:
 
   /** Injected by CDI; null when instantiated directly in unit tests (guarded below). */
-  @Inject var botClient: BotClient = uninitialized
+  @Inject var kafkaProducer: BotMoveKafkaProducer = uninitialized
 
   /** Null in unit tests (no CDI). All persist/load calls are guarded. */
   @Inject var repository: GameRepository = uninitialized
@@ -222,16 +222,35 @@ class GameService:
 
   // ── Bot integration ────────────────────────────────────────────────────────
 
+  /**
+   * Publish a bot move request to Kafka (chess.move-requests).
+   *
+   * Non-blocking: returns immediately; bot-service will compute the move and
+   * publish the result to chess.bot-responses, which BotMoveKafkaConsumer
+   * picks up and routes to applyBotMoveAsync.
+   *
+   * No-op in unit tests where kafkaProducer is null (no CDI).
+   */
   private def applyBotMoveIfNeeded(gameId: String, manager: GameManager): Unit =
-    if botClient == null then return
+    if kafkaProducer == null then return
     for config <- botConfigs.get(gameId) do
       val ctrl = manager.state
       if ctrl.currentTurn == config.botColor then
         val fen      = Fen.encode(ctrl)
         val colorStr = if config.botColor == Color.White then "white" else "black"
-        botClient.fetchMove(fen, colorStr, config.elo) match
-          case Some((from, to)) => manager.move(s"$from $to")
-          case None             => ()
+        kafkaProducer.publishMoveRequest(gameId, fen, colorStr, config.elo)
+
+  /**
+   * Apply a bot move that arrived asynchronously via Kafka (chess.bot-responses).
+   *
+   * Called by BotMoveKafkaConsumer on the poller thread.
+   * Silently ignored if the game has already ended or been deleted.
+   */
+  def applyBotMoveAsync(gameId: String, from: String, to: String): Unit =
+    games.get(gameId).foreach { manager =>
+      manager.move(s"$from $to")
+      updatePgn(gameId, manager)
+    }
 
   // ── Private helpers ────────────────────────────────────────────────────────
 
