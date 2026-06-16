@@ -20,7 +20,9 @@ import {
 } from './api/chessApi'
 
 const INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
-const STORAGE_KEY = 'eja-chess-game-id'
+const STORAGE_KEY          = 'eja-chess-game-id'
+const STORAGE_KEY_OPPONENT = 'eja-chess-opponent-type'
+const STORAGE_KEY_COLOR    = 'eja-chess-player-color'
 const CLOCK_START = 10 * 60 // 10 minutes in seconds
 
 export default function App() {
@@ -32,14 +34,19 @@ export default function App() {
   const [legalMoves, setLegalMoves] = useState<MoveNotation[]>([])
   const [pgn, setPgn] = useState<string>('')
   const [loading, setLoading] = useState(false)
+  const [movePending, setMovePending] = useState(false)
   const [showHomeDialog, setShowHomeDialog] = useState(false)
   const [showLog, setShowLog] = useState(false)
   const [showClockSettings, setShowClockSettings] = useState(false)
   const [showGameSetup, setShowGameSetup] = useState(false)
 
-  // ── Game mode ─────────────────────────────────────────────────────────────
-  const [playerColor, setPlayerColor] = useState<'white' | 'black'>('white')
-  const [opponentType, setOpponentType] = useState<'human' | 'bot'>('human')
+  // ── Game mode — persisted so bot-mode survives page reloads ──────────────
+  const [playerColor, setPlayerColor] = useState<'white' | 'black'>(
+    () => (localStorage.getItem(STORAGE_KEY_COLOR) as 'white' | 'black') ?? 'white',
+  )
+  const [opponentType, setOpponentType] = useState<'human' | 'bot'>(
+    () => (localStorage.getItem(STORAGE_KEY_OPPONENT) as 'human' | 'bot') ?? 'human',
+  )
 
   // ── Chess clock ───────────────────────────────────────────────────────────
   const [clockSetting, setClockSetting] = useState(CLOCK_START)
@@ -134,12 +141,23 @@ export default function App() {
     }
   }, [gameId, refreshGame])
 
+  // ── Bot move polling ──────────────────────────────────────────────────────
+  // When it's the bot's turn, poll the server every 750 ms until the bot has
+  // responded (Kafka async round-trip) and the turn switches back to the player.
+  useEffect(() => {
+    if (!isBotTurn || !gameId) return
+    const id = setInterval(() => void refreshGame(gameId), 750)
+    return () => clearInterval(id)
+  }, [isBotTurn, gameId, refreshGame])
+
   // ── New Game ──────────────────────────────────────────────────────────────
   const handleNewGame = useCallback(async (options: CreateGameRequest = {}) => {
     setShowGameSetup(false)
     setLoading(true)
     setPlayerColor(options.playerColor ?? 'white')
     setOpponentType(options.opponent ?? 'human')
+    localStorage.setItem(STORAGE_KEY_OPPONENT, options.opponent ?? 'human')
+    localStorage.setItem(STORAGE_KEY_COLOR, options.playerColor ?? 'white')
     try {
       const created = await chessApi.createGame(options)
       localStorage.setItem(STORAGE_KEY, created.gameId)
@@ -163,7 +181,8 @@ export default function App() {
   // ── Make Move ─────────────────────────────────────────────────────────────
   const handleMove = useCallback(
     async (from: string, to: string, promotion?: string): Promise<boolean> => {
-      if (!gameId) return false
+      if (!gameId || movePending) return false
+      setMovePending(true)
       try {
         await chessApi.makeMove(gameId, { from, to, promotion })
         await refreshGame(gameId)
@@ -173,9 +192,11 @@ export default function App() {
           err instanceof ApiError ? err.message : 'Ungültiger Zug'
         toast.error(msg)
         return false
+      } finally {
+        setMovePending(false)
       }
     },
-    [gameId, refreshGame],
+    [gameId, movePending, refreshGame],
   )
 
   // ── Undo ──────────────────────────────────────────────────────────────────
@@ -282,6 +303,8 @@ export default function App() {
 
   const handleHomeDiscard = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(STORAGE_KEY_OPPONENT)
+    localStorage.removeItem(STORAGE_KEY_COLOR)
     goHome()
   }, [goHome])
 
@@ -425,8 +448,9 @@ export default function App() {
                 <ChessBoard
                   position={position}
                   legalMoves={isGameOver || isBotTurn ? [] : legalMoves}
-                  disabled={loading || isGameOver || isBotTurn}
+                  disabled={loading || isGameOver || isBotTurn || movePending}
                   orientation={playerColor}
+                  playerColor={opponentType === 'bot' ? playerColor : undefined}
                   onMove={handleMove}
                 />
               </div>

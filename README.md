@@ -14,7 +14,8 @@ Entwickelt als verteiltes System bestehend aus mehreren unabhängig deployten Di
 │   ├── chess-api/         Game-Service — REST-API, Session-Verwaltung       Port 8080
 │   ├── bot-service/       Bot-Service  — KI-Zugberechnung (stateless)        Port 8081
 │   ├── chess-ui/          Web-UI       — React/TypeScript SPA                Port 5173
-│   └── chess-bot/         Desktop-Client — JavaFX GUI + TUI (standalone)
+│   ├── chess-bot/         Desktop-Client — JavaFX GUI + TUI (standalone)
+│   └── spark-analytics/   Spark Analytics — Batch (CSV) & Kafka Streaming
 ├── docs/
 │   ├── adr/               Architecture Decision Records
 │   ├── readme/            Themen-spezifische Dokumentationen
@@ -267,6 +268,7 @@ Detaillierte Anleitungen: [docs/readme/persistence-demo.md](docs/readme/persiste
 ./gradlew :modules:bot-service:test
 ./gradlew :core:test
 ./gradlew :modules:chess-bot:test
+./gradlew :modules:spark-analytics:test
 
 # Web-UI
 ./gradlew :modules:chess-ui:npmTest
@@ -279,6 +281,7 @@ Detaillierte Anleitungen: [docs/readme/persistence-demo.md](docs/readme/persiste
 | Schicht       | Technologie                              |
 |---------------|------------------------------------------|
 | Backend       | Scala 3.5, Quarkus 3.25, Jakarta REST    |
+| Analytics     | Apache Spark 3.5, Structured Streaming, Kafka |
 | Persistenz    | Slick 3.5 (FRM) / Panache+Hibernate (JPA) |
 | Bot-KI        | Greedy-Random-Algorithmus, ELO-gesteuert |
 | Web-Frontend  | React 18, TypeScript, Vite, Tailwind CSS |
@@ -304,6 +307,7 @@ Detaillierte Anleitungen: [docs/readme/persistence-demo.md](docs/readme/persiste
 | **Persistenz — Slick vs. Panache Vergleich** | **[docs/readme/persistence-slick-vs-panache.md](docs/readme/persistence-slick-vs-panache.md)** |
 | **Streams erklärt — Präsentation (Pekko + FS2)** | **[docs/readme/STREAMS_PRESENTATION.md](docs/readme/STREAMS_PRESENTATION.md)** |
 | Reactive Streams Implementation | [docs/readme/REACTIVE_STREAMS_IMPLEMENTATION.md](docs/readme/REACTIVE_STREAMS_IMPLEMENTATION.md) |
+| **Spark Analytics — Batch & Streaming** | **[docs/readme/spark-analytics.md](docs/readme/spark-analytics.md)** |
 | Architektur-Entscheidungen (ADRs) | [docs/adr/](docs/adr/) |
 | Offene Probleme | [docs/unresolved.md](docs/unresolved.md) |
 
@@ -319,3 +323,4 @@ Detaillierte Anleitungen: [docs/readme/persistence-demo.md](docs/readme/persiste
 | `feature/bot-implementation` | Bot-Implementierung |
 | `feature/persistence-approach-a` | Persistenz mit **Slick (FRM)** + H2/PostgreSQL |
 | `feature/persistence-panache-approach` | Persistenz mit **Panache/Hibernate (JPA)** + H2/PostgreSQL |
+| `feature/spark` | Spark Analytics — Batch (CSV) & Kafka Structured Streaming |

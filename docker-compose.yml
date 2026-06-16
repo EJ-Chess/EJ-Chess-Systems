@@ -98,6 +98,7 @@ services:
       - "8080:8080"
     environment:
       BOT_SERVICE_URL: http://bot-service:8081
+      KAFKA_ENABLED: "false"
       QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
     depends_on:
       bot-service:

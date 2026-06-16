@@ -1,5 +1,6 @@
 import { useState, useCallback, CSSProperties } from 'react'
 import { Chessboard } from 'react-chessboard'
+import type { Square } from 'react-chessboard/dist/chessboard/types'
 import type { MoveNotation } from '../api/chessApi'
 import { isPawnPromotion } from '../lib/utils'
 
@@ -8,6 +9,8 @@ interface ChessBoardProps {
   legalMoves: MoveNotation[]
   disabled: boolean
   orientation?: 'white' | 'black'
+  /** When set, only pieces of this color can be selected or dragged. */
+  playerColor?: 'white' | 'black'
   onMove: (from: string, to: string, promotion?: string) => Promise<boolean>
 }
 
@@ -49,6 +52,7 @@ export function ChessBoard({
   legalMoves,
   disabled,
   orientation = 'white',
+  playerColor,
   onMove,
 }: ChessBoardProps) {
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null)
@@ -56,6 +60,16 @@ export function ChessBoard({
     from: string
     to: string
   } | null>(null)
+
+  /** Returns true when the piece belongs to the acting player (or no restriction set). */
+  const isOwnPiece = useCallback(
+    (pieceCode: string) => {
+      if (!playerColor) return true
+      const colorChar = playerColor === 'white' ? 'w' : 'b'
+      return pieceCode.charAt(0) === colorChar
+    },
+    [playerColor],
+  )
 
   const movesFromSquare = useCallback(
     (square: string) => legalMoves.filter((m) => m.from === square),
@@ -109,8 +123,8 @@ export function ChessBoard({
   // react-chessboard expects synchronous boolean from onPieceDrop.
   // We return false (piece snaps back) and drive position through server state.
   const handlePieceDrop = useCallback(
-    (sourceSquare: string, targetSquare: string): boolean => {
-      if (disabled) return false
+    (sourceSquare: string, targetSquare: string, piece: string): boolean => {
+      if (disabled || !isOwnPiece(piece)) return false
       setSelectedSquare(null)
 
       const isLegal = legalMoves.some(
@@ -158,9 +172,12 @@ export function ChessBoard({
         onSquareClick={handleSquareClick}
         onPieceDrop={handlePieceDrop}
         onPromotionPieceSelect={handlePromotionPieceSelect}
+        showPromotionDialog={pendingPromotion !== null}
+        promotionToSquare={(pendingPromotion?.to ?? undefined) as Square | undefined}
         customSquareStyles={customSquareStyles()}
         boardOrientation={orientation}
         arePiecesDraggable={!disabled}
+        isDraggablePiece={({ piece }) => !disabled && isOwnPiece(piece)}
         promotionDialogVariant="modal"
         customDarkSquareStyle={{ backgroundColor: '#769656' }}
         customLightSquareStyle={{ backgroundColor: '#eeeed2' }}
