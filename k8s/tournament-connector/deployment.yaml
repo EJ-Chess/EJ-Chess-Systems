@@ -25,7 +25,7 @@ spec:
           value: "true"
         # Externer Turnierserver — beide Server liegen im HTWG-Netz, kein VPN nötig
         - name: CONNECTOR_TOURNAMENT_SERVER_URL
-          value: "http://141.37.74.152:8086"
+          value: "http://141.37.123.132:8086"
         # Bot-Service intern im Cluster erreichbar
         - name: CONNECTOR_BOT_SERVICE_URL
           value: "http://bot-service:8081"

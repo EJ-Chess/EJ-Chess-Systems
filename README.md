@@ -308,7 +308,7 @@ Datei: `modules/tournament-connector/src/main/resources/application.properties`
 
 ```properties
 # Externer Turnierserver (VPN für interne IP nötig)
-connector.tournament.server.url=http://141.37.74.152:8086
+connector.tournament.server.url=http://141.37.123.132:8086
 
 # Bot-Identität
 connector.bot.name=EJaChessBot

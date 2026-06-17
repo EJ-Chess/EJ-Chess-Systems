@@ -122,7 +122,7 @@ services:
     ports:
       - "8088:8088"
     environment:
-      CONNECTOR_TOURNAMENT_SERVER_URL: http://141.37.74.152:8086
+      CONNECTOR_TOURNAMENT_SERVER_URL: http://141.37.123.132:8086
       CONNECTOR_BOT_NAME: EJaChessBot
       CONNECTOR_BOT_ELO: "1400"
       CONNECTOR_BOT_SERVICE_URL: http://bot-service:8081
