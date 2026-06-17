@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tournament-connector
+  namespace: chess
+spec:
+  type: ClusterIP
+  selector:
+    app: tournament-connector
+  ports:
+  - port: 8088
+    targetPort: 8088
+    name: http

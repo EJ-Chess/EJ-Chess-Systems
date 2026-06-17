@@ -16,3 +16,15 @@ dist/
 
 # npm lock files generated locally
 modules/chess-api/package-lock.json
+
+# Credentials / secrets
+credentials.txt
+pw.txt
+
+# Binary artifacts
+images.tar
+tournament-connector.tar
+
+# Lichess data files
+lichess*.pgn
+lichess*.zst

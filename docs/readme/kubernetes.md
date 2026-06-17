@@ -1,280 +1,169 @@
-# Kubernetes Deployment (k3s) auf dem Uni-Server
+# Kubernetes Deployment (k3d) auf dem Uni-Server
 
-Diese Anleitung erklärt, wie die EJa Chess Services auf `aim-chess-2` mit k3s (Lightweight Kubernetes) deployed werden.
+Die Plattform läuft auf `141.37.123.121` als k3d-Cluster (k3s in Docker — kein Root nötig).
 
----
-
-## Schritt 1: k3s auf dem Server installieren
-
-SSH auf den Server:
-```bash
-ssh chess@141.37.74.141
-```
-
-k3s installieren:
-```bash
-curl -sfL https://get.k3s.io | sh -
-```
-
-kubectl-Zugriff ohne sudo konfigurieren:
-```bash
-mkdir -p ~/.kube
-sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
-sudo chown $USER ~/.kube/config
-sudo chmod 600 ~/.kube/config
-```
-
-Prüfen, dass es funktioniert:
-```bash
-kubectl get nodes
-```
-
-Output sollte ähnlich aussehen:
-```
-NAME          STATUS   ROLES                  AGE   VERSION
-aim-chess-2   Ready    control-plane,master   1m    v1.xx.x
-```
+**Zugangsdaten:** `ssh chess@141.37.123.121` → Passwort in `credentials.txt`
 
 ---
 
-## Schritt 2: Docker Images bauen und zum Server übertragen
+## Cluster-Übersicht
 
-**Lokal auf eurem Rechner** (nicht auf dem Server!):
+| Komponente | Detail |
+|-----------|--------|
+| Tool | k3d v5 (k3s in Docker-Containern) |
+| Cluster-Name | `eljachess` |
+| Namespace | `chess` |
+| Web-UI Port | `30080` |
+| pgAdmin Port | `30050` |
+| kubectl | `docker exec k3d-eljachess-server-0 kubectl` |
 
-### 2a. Quarkus fast-JARs bauen
+---
+
+## URLs (über VPN)
+
+| URL | Dienst |
+|-----|--------|
+| http://141.37.123.121:30080 | Web-UI |
+| http://141.37.123.121:30050 | pgAdmin (admin@chess.com / admin) |
+
+---
+
+## Deployment aktualisieren (nach Code-Änderungen)
+
+### Schritt 1 — JARs lokal bauen
+
 ```bash
-cd /c/HTWG/Bachelor/SS26/Software\ Architektur\ \(SA\)/EJ-Chess-Systems
 ./gradlew :modules:chess-api:quarkusBuild :modules:bot-service:quarkusBuild
 ```
 
-### 2b. Docker Images bauen
+### Schritt 2 — Docker Images lokal bauen
+
+> **Wichtig:** Image-Namen müssen mit den k8s-Manifesten übereinstimmen (`eljachess/` Prefix).
+
 ```bash
-cd modules/chess-api
-docker build -t eja-chess/game-service:latest .
-cd ../bot-service
-docker build -t eja-chess/bot-service:latest .
-cd ../chess-ui
-docker build -t eja-chess/chess-ui:latest .
+docker build -t eljachess/chess-api:latest  modules/chess-api
+docker build -t eljachess/bot-service:latest modules/bot-service
+docker build -t eljachess/chess-ui:latest   modules/chess-ui
 ```
 
-### 2c. Images zum Server übertragen
+### Schritt 3 — Images zum Server übertragen und in k3d importieren
+
 ```bash
-# Lokal: Alle drei Images in eine Datei packen und mit gzip komprimieren
-docker save eja-chess/game-service:latest eja-chess/bot-service:latest eja-chess/chess-ui:latest \
-  | gzip | ssh chess@141.37.74.141 "gunzip | sudo k3s ctr images import -"
+docker save eljachess/chess-api:latest eljachess/bot-service:latest eljachess/chess-ui:latest \
+  | gzip \
+  | ssh chess@141.37.123.121 \
+    "gunzip | docker load && ~/.local/bin/k3d image import eljachess/chess-api:latest eljachess/bot-service:latest eljachess/chess-ui:latest --cluster eljachess"
 ```
 
-Das kann 1-2 Minuten dauern. Wenn es fertig ist, seid ihr fertig mit den Images.
+### Schritt 4 — Manifeste anwenden (nur bei YAML-Änderungen nötig)
 
----
-
-## Schritt 3: Kubernetes Manifeste auf dem Server anwenden
-
-SSH auf dem Server (falls noch nicht verbunden):
 ```bash
-ssh chess@141.37.74.141
+ssh chess@141.37.123.121 "cd ~/EJ-Chess-Systems && git pull && \
+  docker exec k3d-eljachess-server-0 kubectl apply -f k8s/"
 ```
 
-Manifest-Verzeichnis vom Git clonen oder hochladen. Annahme: die `k8s/` Verzeichnis-Struktur existiert auf dem Server unter `~/chess-manifests/`:
+### Schritt 5 — Pods neu starten (neue Images laden)
 
 ```bash
-# Namespace + Secret + ConfigMap anwenden
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/secret.yaml
-kubectl apply -f k8s/configmap.yaml
+ssh chess@141.37.123.121 "
+  docker exec k3d-eljachess-server-0 kubectl rollout restart deployment/game-service -n chess
+  docker exec k3d-eljachess-server-0 kubectl rollout restart deployment/bot-service  -n chess
+  docker exec k3d-eljachess-server-0 kubectl rollout restart deployment/chess-ui     -n chess
+"
+```
 
-# PostgreSQL
-kubectl apply -f k8s/postgres/pvc.yaml
-kubectl apply -f k8s/postgres/deployment.yaml
-kubectl apply -f k8s/postgres/service.yaml
+### Schritt 6 — Status prüfen
 
-# Bot-Service (wartet auf nichts)
-kubectl apply -f k8s/bot-service/deployment.yaml
-kubectl apply -f k8s/bot-service/service.yaml
+```bash
+ssh chess@141.37.123.121 "docker exec k3d-eljachess-server-0 kubectl get pods -n chess"
+```
 
-# Game-Service (wartet auf bot-service healthy)
-kubectl apply -f k8s/game-service/deployment.yaml
-kubectl apply -f k8s/game-service/service.yaml
-
-# Chess-UI (wartet auf game-service)
-kubectl apply -f k8s/chess-ui/deployment.yaml
-kubectl apply -f k8s/chess-ui/service.yaml
-
-# pgAdmin (optional)
-kubectl apply -f k8s/pgadmin/deployment.yaml
-kubectl apply -f k8s/pgadmin/service.yaml
+Erwartete Ausgabe (alle `Running`):
+```
+NAME                            READY   STATUS    RESTARTS   AGE
+bot-service-xxx                 1/1     Running   0          1m
+chess-ui-xxx                    1/1     Running   0          1m
+game-service-xxx                1/1     Running   0          1m
+postgres-xxx                    1/1     Running   0          13d
 ```
 
 ---
 
-## Schritt 4: Status prüfen
+## Erstes Setup (einmalig — Cluster existiert bereits)
 
-Alle Pods sollten innerhalb von ~2 Minuten in `Running` Status sein:
-
-```bash
-kubectl get pods -n chess -w
-```
-
-`-w` heißt "watch" — drücke Ctrl+C zum Beenden.
-
-Output beispielsweise:
-```
-NAME                      READY   STATUS    RESTARTS   AGE
-postgres-5f7b8c6d4-xyz    1/1     Running   0          60s
-bot-service-abc123-xyz    1/1     Running   0          50s
-game-service-def456-xyz   1/1     Running   0          40s
-chess-ui-ghi789-xyz       1/1     Running   0          30s
-pgadmin-jkl012-xyz        1/1     Running   0          25s
-```
-
-Alle Services sollten erreichbar sein:
+Der Cluster ist bereits vorhanden. Diese Schritte nur bei komplettem Neustart nötig.
 
 ```bash
-kubectl get services -n chess
-```
+ssh chess@141.37.123.121
 
-Output:
-```
-NAME            TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)           AGE
-postgres        ClusterIP   10.43.x.x       <none>        5432/TCP          60s
-bot-service     ClusterIP   10.43.x.x       <none>        8081/TCP          50s
-game-service    ClusterIP   10.43.x.x       <none>        8080/TCP          40s
-chess-ui        NodePort    10.43.x.x       <none>        80:30080/TCP      30s
-pgadmin         NodePort    10.43.x.x       <none>        80:30050/TCP      25s
+# k3d und kubectl sind in ~/.local/bin
+export PATH="$HOME/.local/bin:$PATH"
+
+# Cluster-Status prüfen
+k3d cluster list
+
+# Falls Cluster nicht läuft, starten
+k3d cluster start eljachess
+
+# kubeconfig setzen
+mkdir -p ~/.kube
+k3d kubeconfig get eljachess > ~/.kube/config
+
+# Manifeste anwenden
+cd ~/EJ-Chess-Systems
+docker exec k3d-eljachess-server-0 kubectl apply -f k8s/
 ```
 
 ---
 
-## Schritt 5: Von außen zugreifen
-
-Außerhalb des Servers (z.B. vom eigenen Laptop über VPN):
-
-**Web-UI:**
-```
-http://141.37.74.141:30080
-```
-
-**pgAdmin** (optional):
-```
-http://141.37.74.141:30050
-```
-Anmeldung: `admin@chess.com` / `admin`
-
-In pgAdmin kannst du die Postgres-Datenbank konfigurieren:
-- Hostname: `postgres` (Service-Name innerhalb des Clusters)
-- Port: `5432`
-- Database: `chess`
-- Username: `chess`
-- Password: `chess`
-
----
-
-## Logs anschauen
-
-Wenn etwas nicht läuft, schaut euch die Logs an:
+## Logs & Debugging
 
 ```bash
-# Alle Logs im chess-Namespace
-kubectl logs -n chess --all-containers=true -l app=<service-name>
+# Alle Pods anzeigen
+ssh chess@141.37.123.121 "docker exec k3d-eljachess-server-0 kubectl get pods -n chess"
 
-# Logs eines bestimmten Pods
-kubectl logs -n chess deployment/game-service
+# Logs eines Services
+ssh chess@141.37.123.121 "docker exec k3d-eljachess-server-0 kubectl logs -n chess deployment/game-service"
 
-# Live-Logs (wie `tail -f`)
-kubectl logs -n chess -f deployment/game-service
+# Live-Logs
+ssh chess@141.37.123.121 "docker exec k3d-eljachess-server-0 kubectl logs -n chess -f deployment/game-service"
 
-# Logs eines bestimmten Containers wenn Pod mehrere hat
-kubectl logs -n chess deployment/game-service -c game-service
+# Pod Details (bei Problemen)
+ssh chess@141.37.123.121 "docker exec k3d-eljachess-server-0 kubectl describe pod -n chess <pod-name>"
 ```
 
 ---
 
-## Pods neu starten (falls nötig)
+## Häufige Probleme
 
+### Bot antwortet nicht
+`KAFKA_ENABLED=false` muss in der ConfigMap gesetzt sein (kein Kafka im Cluster).
 ```bash
-# Einen Pod löschen — Deployment erstellt ihn neu
-kubectl delete pod -n chess <pod-name>
-
-# Alle Pods eines Services neu starten
-kubectl rollout restart deployment/game-service -n chess
+ssh chess@141.37.123.121 "docker exec k3d-eljachess-server-0 kubectl get configmap chess-config -n chess -o yaml"
 ```
 
----
-
-## Manifeste aktualisieren
-
-Wenn ihr Code ändert:
-
-1. **Lokal neu bauen:**
-   ```bash
-   ./gradlew :modules:chess-api:quarkusBuild :modules:bot-service:quarkusBuild
-   docker build -t eja-chess/game-service:latest modules/chess-api
-   docker build -t eja-chess/bot-service:latest modules/bot-service
-   docker build -t eja-chess/chess-ui:latest modules/chess-ui
-   ```
-
-2. **Neue Images zum Server:**
-   ```bash
-   docker save eja-chess/game-service:latest eja-chess/bot-service:latest eja-chess/chess-ui:latest \
-     | gzip | ssh chess@141.37.74.141 "gunzip | sudo k3s ctr images import -"
-   ```
-
-3. **Pods neu starten (damit die neuen Images geladen werden):**
-   ```bash
-   ssh chess@141.37.74.141
-   kubectl rollout restart deployment/game-service -n chess
-   kubectl rollout restart deployment/bot-service -n chess
-   kubectl rollout restart deployment/chess-ui -n chess
-   ```
-
----
-
-## Alles wieder löschen
-
-Falls ihr komplett von vorne anfangen wollt:
-
+### Pod bleibt in `Pending`
 ```bash
-kubectl delete namespace chess
+ssh chess@141.37.123.121 "docker exec k3d-eljachess-server-0 kubectl describe pod -n chess <pod-name>"
 ```
+Meist: Image nicht in k3d importiert (`imagePullPolicy: Never` → Image muss lokal im Cluster sein).
 
-Das löscht:
-- Alle Pods
-- Alle Services
-- Alle Deployments
-- Die PostgreSQL-Daten (PVC)
-
----
-
-## Troubleshooting
-
-### Pod bleibt im "Pending"-Status
-Cluster-Resources zu klein. Aber für einen Server mit 4+ GB RAM sollte das kein Problem sein.
-
-### Pod crasht immer wieder
+### Image-Import prüfen
 ```bash
-kubectl describe pod -n chess <pod-name>
+ssh chess@141.37.123.121 "docker exec k3d-eljachess-server-0 crictl images | grep eljachess"
 ```
-Schaut euch die "Events" am Ende an — dort sieht man den Grund.
 
-### Datenbank-Fehler im game-service
-Postgres braucht ein paar Sekunden zum Hochfahren. game-service wartet per `readinessProbe` bis Postgres ready ist. Falls das nicht funktioniert:
-
+### Alles neu starten
 ```bash
-kubectl logs -n chess deployment/postgres
+ssh chess@141.37.123.121 "
+  docker exec k3d-eljachess-server-0 kubectl rollout restart deployment -n chess
+"
 ```
 
-### Web-UI lädt Seite aber keine Daten vom Game-Service
-Das liegt meist daran, dass nginx nicht richtig an game-service verbunden ist. Aktuell ist in der nginx.conf hardcodiert:
+### Namespace komplett neu anlegen
+```bash
+ssh chess@141.37.123.121 "
+  docker exec k3d-eljachess-server-0 kubectl delete namespace chess
+  cd ~/EJ-Chess-Systems && docker exec k3d-eljachess-server-0 kubectl apply -f k8s/
+"
 ```
-proxy_pass http://game-service:8080;
-```
-
-Das sollte funktionieren, weil `game-service` der Name des K8s Service ist.
-
----
-
-## Nächste Schritte
-
-- Monitoring: `kubectl top nodes` / `kubectl top pods`
-- Ingress-Controller für richtige DNS-Namen statt NodePorts
-- Persistent volumes richtig konfigurieren (aktuell: lokal auf dem Server)

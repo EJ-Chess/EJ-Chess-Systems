@@ -71,6 +71,14 @@ tasks.register<JavaExec>("runKafkaStream") {
     )
 }
 
+tasks.register<JavaExec>("runLichess") {
+    group = "application"
+    description = "Run chess analytics on a Lichess PGN file (--args=\"/path/to/file.pgn\")"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("de.eljachess.spark.LichessFileAnalytics")
+    jvmArgs(sparkJvmArgs + listOf("-Dspark.sql.shuffle.partitions=4"))
+}
+
 // ── Test ─────────────────────────────────────────────────────────────────────
 
 tasks.test {

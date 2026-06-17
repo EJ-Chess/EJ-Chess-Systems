@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tournament-connector
+  namespace: chess
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tournament-connector
+  template:
+    metadata:
+      labels:
+        app: tournament-connector
+    spec:
+      containers:
+      - name: tournament-connector
+        image: eljachess/tournament-connector:latest
+        imagePullPolicy: Never  # k3s uses local images only
+        ports:
+        - containerPort: 8088
+          name: http
+        env:
+        - name: QUARKUS_OTEL_SDK_DISABLED
+          value: "true"
+        # Externer Turnierserver — beide Server liegen im HTWG-Netz, kein VPN nötig
+        - name: CONNECTOR_TOURNAMENT_SERVER_URL
+          value: "http://141.37.74.152:8086"
+        # Bot-Service intern im Cluster erreichbar
+        - name: CONNECTOR_BOT_SERVICE_URL
+          value: "http://bot-service:8081"
+        - name: CONNECTOR_BOT_NAME
+          value: "EJaChessBot"
+        - name: CONNECTOR_BOT_ELO
+          value: "1400"
+        # CONNECTOR_TOURNAMENT_ID nicht gesetzt = auto-join (default "" aus application.properties)
+        # Zum Beitreten eines bestimmten Turniers hier eintragen:
+        # - name: CONNECTOR_TOURNAMENT_ID
+        #   value: "deine-turnier-id"
+        - name: CONNECTOR_POLL_INTERVAL_SECONDS
+          value: "30"
+        - name: CONNECTOR_ENABLED
+          value: "true"
+        readinessProbe:
+          httpGet:
+            path: /q/health/ready
+            port: 8088
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /q/health/ready
+            port: 8088
+          initialDelaySeconds: 40
+          periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"

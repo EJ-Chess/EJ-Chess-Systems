@@ -1,10 +1,11 @@
 # Spark Analytics – Aggregation von Schachdaten
 
 Das Modul **`spark-analytics`** implementiert die Vorlesungsaufgabe zu Apache Spark.  
-Es aggregiert Spieldaten aus der Chess-Anwendung mit zwei Varianten:
+Es aggregiert Schachdaten aus zwei Quellen mit drei Varianten:
 
-1. **File Analytics** – liest eine CSV-Datei und berechnet Statistiken (Highscore, Siegquoten, …)
-2. **Kafka Streaming** – liest `chess.move-requests` als Echtzeit-Stream und aggregiert laufend
+1. **File Analytics (eigene Daten)** – liest eine CSV-Datei mit eigenen Spieldaten und berechnet Statistiken
+2. **Lichess Big Data** – liest echte PGN-Exporte von [database.lichess.org](https://database.lichess.org) und analysiert hunderttausende Partien
+3. **Kafka Streaming** – liest `chess.move-requests` als Echtzeit-Stream und aggregiert laufend
 
 ---
 
@@ -15,24 +16,23 @@ Es aggregiert Spieldaten aus der Chess-Anwendung mit zwei Varianten:
 | **Sprache** | Scala **2.13** (Spark unterstützt noch kein Scala 3) |
 | **Framework** | Apache Spark 3.5.3 (Structured Streaming) |
 | **Kafka-Topic** | `chess.move-requests` (bereits vom chess-api produziert) |
-| **Einstiegspunkte** | `ChessFileAnalytics`, `ChessKafkaStream` |
-| **Tests** | 10 Unit-Tests mit ScalaTest + JUnit 4 Runner |
+| **Einstiegspunkte** | `ChessFileAnalytics`, `LichessFileAnalytics`, `ChessKafkaStream` |
+| **Tests** | 23 Unit-Tests mit ScalaTest + JUnit 4 Runner |
 
 ---
 
 ## Architektur
 
 ```
-chess_games.csv  ──►  ChessFileAnalytics
-                             │
-                             ▼
-                       ChessAnalytics          (gemeinsame Aggregations-Logik)
-                             │
-                   ┌─────────┴──────────┐
-                   ▼                    ▼
-            victoriesPerPlayer     winsPerColor
-            avgBotEloBeatByPlayer  bestPlayer
-
+chess_games.csv       ──►  ChessFileAnalytics  ──┐
+                                                  │
+lichess_*.pgn         ──►  LichessFileAnalytics   ├──►  ChessAnalytics
+  (database.lichess.org)    └── LichessDataLoader ┘     (gemeinsame Aggregations-Logik)
+                                 └── PGN-Parser          │
+                                                   ┌─────┴──────────┐
+                                                   ▼                ▼
+                                           victoriesPerPlayer   winsPerColor
+                                           avgBotEloBeatByPlayer  bestPlayer
 
 chess.move-requests (Kafka)
          │
@@ -204,6 +204,113 @@ private def testDf(): DataFrame = withSpark { s =>
 
 ---
 
+---
+
+## Lichess Big Data Integration
+
+### Datenquelle
+
+Die Lichess Open Database ([database.lichess.org](https://database.lichess.org)) stellt monatliche PGN-Exporte aller bewerteten Partien unter der **CC0-Lizenz** bereit.
+
+| Datei | Komprimiert | Partien |
+|-------|------------|---------|
+| `lichess_db_standard_rated_2013-01.pgn.zst` | 17,8 MB | 121.332 |
+| Aktuelle Monate | ~30 GB | ~90 Mio. |
+
+### PGN-Format (Lichess)
+
+```pgn
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/PpwPOZMq"]
+[White "Abbot"]
+[Black "Costello"]
+[Result "0-1"]
+[WhiteElo "2100"]
+[BlackElo "2000"]
+
+1. e4 { [%eval 0.17] [%clk 0:00:30] } 1... c5 { [%eval 0.19] [%clk 0:00:30] } 0-1
+```
+
+### Mapping PGN → DataFrame
+
+`LichessDataLoader` erzeugt pro Partie **2 Zeilen** (je eine für Weiß und Schwarz), damit `victoriesPerPlayer` und `avgBotEloBeatByPlayer` für alle Spieler korrekt funktionieren:
+
+| PGN-Feld | DataFrame-Spalte | Beispiel |
+|----------|-----------------|---------|
+| `Site` (letztes Segment) | `gameId` | `PpwPOZMq` |
+| `White` / `Black` | `playerName` | `Abbot` |
+| `"white"` / `"black"` | `playerColor` | `white` |
+| `Result` (1-0 / 0-1 / ½-½) | `winner` | `black` |
+| Gegner-`WhiteElo` / `BlackElo` | `botElo` | `2000` |
+| Anzahl Halbzüge (Plies) | `moveCount` | `26` |
+
+**Move-Counting:** Kommentare `{ [%eval] [%clk] }`, Zugnummern `1.` / `1...` und NAGs `$1` werden entfernt; die verbleibenden Tokens sind die echten Züge.
+
+### Nachgewiesener Lauf — Januar 2013
+
+Ausgeführt am 17.06.2026 auf `lichess_db_standard_rated_2013-01.pgn` (88,5 MB entpackt):
+
+```
+══════════════════════════════════════════
+  Chess Game Analytics  (Lichess PGN)
+  File: lichess_db_standard_rated_2013-01.pgn
+══════════════════════════════════════════
+
+Total game rows: 242664 (2 per game = 121332 Partien)
+
+── Victories per Player (top 20) ────────
++-----------------+---------+
+|playerName       |victories|
++-----------------+---------+
+|cheesedout       |944      |
+|F1_ALONSO_FERRARI|919      |
+|german11         |843      |
+|nichiren1967     |826      |
+|Panevis          |815      |
+|ChikiPuki        |742      |
+...
++-----------------+---------+
+
+── Wins per Color ───────────────────────
++------+----------+
+|winner|total_wins|
++------+----------+
+|white |124258    |
+|black |110442    |
++------+----------+
+
+── Average Opponent ELO Beaten (top 20) ─
++-----------------+------------------+
+|playerName       |avg_bot_elo_beaten|
++-----------------+------------------+
+|brahmsguitar     |2132.75           |
+|screwball        |2017.89           |
+|ObviousEngineUser|1989.0            |
+...
++-----------------+------------------+
+
+── Best Player: cheesedout
+```
+
+**Laufzeit:** ~29 Sekunden lokal (`local[*]`, JDK 21, Windows 11)
+
+**Beobachtung:** Weiß gewinnt häufiger als Schwarz (124.258 vs. 110.442) — entspricht dem bekannten Anzugsvorteil im Schach (~53 % Weiß-Gewinnquote).
+
+### Download & Ausführen
+
+```powershell
+# 1. Download (PowerShell)
+Invoke-WebRequest -Uri "https://database.lichess.org/standard/lichess_db_standard_rated_2013-01.pgn.zst" -OutFile "lichess.pgn.zst"
+
+# 2. Entpacken (7-Zip oder PeaZip)
+& "C:\Program Files\7-Zip\7z.exe" e lichess.pgn.zst
+
+# 3. Analytics starten
+./gradlew :modules:spark-analytics:runLichess --args="C:\Users\<name>\Downloads\lichess_db_standard_rated_2013-01.pgn"
+```
+
+---
+
 ## Starten
 
 ### File Analytics (Schritt 1)
@@ -215,6 +322,12 @@ private def testDf(): DataFrame = withSpark { s =>
 Optional mit eigener CSV-Datei:
 ```bash
 ./gradlew :modules:spark-analytics:run --args="/pfad/zur/datei.csv"
+```
+
+### Lichess Big Data Analytics
+
+```bash
+./gradlew :modules:spark-analytics:runLichess --args="/pfad/zur/lichess.pgn"
 ```
 
 ### Kafka Streaming (Schritt 2)

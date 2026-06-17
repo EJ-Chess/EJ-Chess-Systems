@@ -9,19 +9,23 @@ Entwickelt als verteiltes System bestehend aus mehreren unabhängig deployten Di
 
 ```
 .
-├── core/                  Reine Schach-Engine (Board, Fen, Pgn, GameController …)
+├── core/                       Reine Schach-Engine (Board, Fen, Pgn, GameController …)
 ├── modules/
-│   ├── chess-api/         Game-Service — REST-API, Session-Verwaltung       Port 8080
-│   ├── bot-service/       Bot-Service  — KI-Zugberechnung (stateless)        Port 8081
-│   ├── chess-ui/          Web-UI       — React/TypeScript SPA                Port 5173
-│   ├── chess-bot/         Desktop-Client — JavaFX GUI + TUI (standalone)
-│   └── spark-analytics/   Spark Analytics — Batch (CSV) & Kafka Streaming
+│   ├── chess-api/              Game-Service — REST-API, Session-Verwaltung       Port 8080
+│   ├── bot-service/            Bot-Service  — KI-Zugberechnung (stateless)        Port 8081
+│   ├── tournament-service/     Tournament-Service — Turnierverwaltung (intern)     Port 8086
+│   ├── tournament-connector/   Tournament-Connector — Bridge zu externem Server   Port 8088
+│   ├── chess-ui/               Web-UI — React/TypeScript SPA                      Port 5173
+│   ├── chess-bot/              Desktop-Client — JavaFX GUI (standalone)
+│   ├── gatling/                Gatling Lasttests
+│   ├── jmh-benchmarks/         JMH Mikro-Benchmarks (Chess-Engine)
+│   └── spark-analytics/        Spark Analytics — Batch (CSV) & Kafka Streaming
 ├── docs/
-│   ├── adr/               Architecture Decision Records
-│   ├── readme/            Themen-spezifische Dokumentationen
-│   └── unresolved.md      Bekannte offene Probleme
-├── build.gradle.kts       Root-Build (gemeinsame Versionen)
-└── settings.gradle.kts    Modul-Deklarationen
+│   ├── adr/                    Architecture Decision Records
+│   ├── readme/                 Themen-spezifische Dokumentationen
+│   └── unresolved.md           Bekannte offene Probleme
+├── build.gradle.kts            Root-Build (gemeinsame Versionen)
+└── settings.gradle.kts         Modul-Deklarationen
 ```
 
 ---
@@ -201,8 +205,8 @@ kubectl apply -f k8s/
 
 | URL | Dienst |
 |-----|--------|
-| http://141.37.74.141:30080 | Web-UI (über VPN) |
-| http://141.37.74.141:30050 | pgAdmin (optional, über VPN) |
+| http://141.37.123.121:30080 | Web-UI (über VPN) |
+| http://141.37.123.121:30050 | pgAdmin (optional, über VPN) |
 
 **Vollständige Anleitung:** [docs/readme/kubernetes.md](docs/readme/kubernetes.md)
 
@@ -229,6 +233,150 @@ docker-compose logs -f bot-service
 # Nur Web-UI neu bauen (nach React-Änderungen, kein JAR-Build nötig)
 docker-compose up --build -d chess-ui
 ```
+
+---
+
+## Tournament-Service (intern) — Port 8086
+
+Der Tournament-Service verwaltet **eigene** Turniere nach dem **Schweizer System**.  
+Er ist von den anderen Services unabhängig und kommuniziert intern mit dem Game-Service, um Spiele anzulegen.
+
+### API-Übersicht
+
+| Endpunkt | Methode | Auth | Beschreibung |
+|---|---|---|---|
+| `/api/tournament` | GET | — | Alle Turniere auflisten (created / started / finished) |
+| `/api/tournament` | POST | JWT (Director) | Turnier erstellen |
+| `/api/tournament/{id}` | GET | — | Turnierdetails |
+| `/api/tournament/{id}/start` | POST | JWT (Director) | Turnier starten (mind. 2 Bots) |
+| `/api/tournament/{id}/join` | POST | JWT (Bot) | Bot anmelden |
+| `/api/tournament/{id}/withdraw` | POST | JWT (Bot) | Bot abmelden |
+| `/api/tournament/{id}/stream` | GET | JWT | NDJSON-Eventstream (Echtzeit) |
+| `/api/tournament/{id}/standings` | GET | — | Aktuelle Rangliste |
+| `/api/tournament/{id}/pairings/{round}` | GET | — | Paarungen einer Runde |
+
+**Paarungsalgorithmus:** Schweizer System (`SwissService`).  
+**Persistenz:** H2 in-memory (dev) oder PostgreSQL (prod) via Slick.  
+**Authentifizierung:** Bearer JWT (eigener Issuer, RSA-Schlüsselpaar in `src/main/resources/`).
+
+```bash
+./gradlew :modules:tournament-service:quarkusDev
+```
+
+---
+
+## Tournament-Connector — Port 8088
+
+> **Neues Modul** — verbindet unseren Bot automatisch mit dem **externen** Turnierserver der Kommilitonen.
+
+Der externe Server läuft als Docker-Container:
+- Intern (VPN erforderlich): `141.37.74.152:8086`
+- Extern: `141.37.123.132:8086`
+- Quellcode: https://github.com/maichess/tournament-server
+
+### Was der Connector macht
+
+```
+Start
+  │
+  ├─ 1. Registrierung   POST /api/auth/register  →  JWT-Token
+  │
+  ├─ 2. Turnier suchen  GET  /api/tournament
+  │       ├─ connector.tournament.id gesetzt?  →  dieses Turnier beitreten
+  │       └─ sonst: erstes "created" oder "started" Turnier
+  │          (Wiederholung alle 30 s, bis eines gefunden wird)
+  │
+  ├─ 3. Beitreten       POST /api/tournament/{id}/join
+  │
+  └─ 4. Event-Stream    GET  /api/tournament/{id}/stream  (NDJSON, dauerhaft offen)
+              │
+              └─ Bei "gameStart": Virtual Thread pro Spiel
+                      │
+                      ├─ Game-Stream  GET /api/tournament/{id}/game/{gameId}/stream
+                      │
+                      ├─ Unser Zug?   POST /bot/move an bot-service  →  UCI-Zug
+                      │
+                      └─ Einreichen   POST /api/tournament/{id}/game/{gameId}/move/{uci}
+```
+
+Mehrere Spiele laufen **parallel** in Virtual Threads.  
+Doppelte `gameStart`-Events für dasselbe Spiel werden dedupliziert.
+
+### Konfiguration
+
+Datei: `modules/tournament-connector/src/main/resources/application.properties`
+
+```properties
+# Externer Turnierserver (VPN für interne IP nötig)
+connector.tournament.server.url=http://141.37.74.152:8086
+
+# Bot-Identität
+connector.bot.name=EJaChessBot
+connector.bot.elo=1400
+
+# Unser bot-service
+connector.bot.service.url=http://localhost:8081
+
+# Turnier-ID — leer lassen für automatische Suche
+connector.tournament.id=
+
+# Wartezeit (Sekunden) zwischen Suchanfragen wenn kein Turnier verfügbar
+connector.poll.interval.seconds=30
+
+# false = Connector deaktiviert (wird in Tests automatisch gesetzt)
+connector.enabled=true
+```
+
+**Spezifisches Turnier beitreten:** `connector.tournament.id=<id>` eintragen.  
+**Automatisch:** Feld leer lassen — der Connector findet das nächste offene Turnier selbst.
+
+### Starten (VPN einschalten!)
+
+```bash
+# bot-service muss laufen (Zugberechnung)
+./gradlew :modules:bot-service:quarkusDev
+
+# Dann Connector starten
+./gradlew :modules:tournament-connector:quarkusDev
+```
+
+### Interner Aufbau
+
+| Datei | Verantwortung |
+|---|---|
+| `dto/Models.scala` | DTOs für externen Server + bot-service (Jackson, `@JsonIgnoreProperties`) |
+| `client/TournamentHttpClient.scala` | HTTP-Calls + NDJSON-Streaming zum externen Server |
+| `client/BotHttpClient.scala` | `POST /bot/move` aufrufen, `{from, to}` → UCI-String |
+| `config/ConnectorConfig.scala` | Alle `@ConfigProperty`-Einstellungen |
+| `service/GameHandler.scala` | Einzelspiel: Stream lesen, eigenen Zug erkennen, Zug einreichen |
+| `service/TournamentConnector.scala` | Startup-Bean: Registrierung → Turnierfindung → Eventdispatching |
+
+**UCI-Konvertierung:** `from + to` (z. B. `"e2" + "e4"` → `"e2e4"`).  
+**Authentifizierung:** Bearer JWT vom externen Server nach Registrierung.
+
+---
+
+## Kafka (optional)
+
+Kafka entkoppelt die Zugkommunikation zwischen `chess-api` und `bot-service` asynchron.
+
+```
+chess-api  →  Topic: chess.move-requests  →  bot-service (Pekko Stream, 8 parallel)
+chess-api  ←  Topic: chess.bot-responses  ←  bot-service
+```
+
+| Variable | Bedeutung | Standard |
+|---|---|---|
+| `KAFKA_ENABLED` | Kafka an/aus | `true` |
+| `KAFKA_BOOTSTRAP_SERVERS` | Kafka-Adresse | `localhost:9092` |
+
+**Mit Kafka starten:**
+
+```bash
+docker compose -f docker-compose-kafka.yml up --build
+```
+
+Detaillierter Ablauf und Konfiguration: [`docs/kafka.md`](docs/kafka.md)
 
 ---
 
@@ -263,9 +411,11 @@ Detaillierte Anleitungen: [docs/readme/persistence-demo.md](docs/readme/persiste
 # Alle Module
 ./gradlew test
 
-# Einzelnes Modul
+# Einzelne Module
 ./gradlew :modules:chess-api:test
 ./gradlew :modules:bot-service:test
+./gradlew :modules:tournament-service:test
+./gradlew :modules:tournament-connector:test
 ./gradlew :core:test
 ./gradlew :modules:chess-bot:test
 ./gradlew :modules:spark-analytics:test
@@ -274,6 +424,18 @@ Detaillierte Anleitungen: [docs/readme/persistence-demo.md](docs/readme/persiste
 ./gradlew :modules:chess-ui:npmTest
 ```
 
+**Test-Konventionen:**
+- Unit-Tests: `AnyFlatSpec with Matchers` (ScalaTest) — kein `@Test`, kein `: Unit`
+- Integrationstests: `@QuarkusTest` + JUnit 5 — `@Test`-Methoden müssen explizit `: Unit` haben
+- Coverage-Ziele: 90 % Branch, 95 % Line, 90 % Method (scoverage)
+
+Coverage-Lücken analysieren:
+```bash
+python jacoco-reporter/scoverage_coverage_gaps.py modules/<service>/build/reports/scoverageTest/scoverage.xml
+```
+
+> **Hinweis:** `modules/{service}/build/reports/scoverage/scoverage.xml` ist **nicht** für Test-Coverage gedacht. Immer `scoverageTest/scoverage.xml` verwenden.
+
 ---
 
 ## Tech-Stack
@@ -281,13 +443,16 @@ Detaillierte Anleitungen: [docs/readme/persistence-demo.md](docs/readme/persiste
 | Schicht       | Technologie                              |
 |---------------|------------------------------------------|
 | Backend       | Scala 3.5, Quarkus 3.25, Jakarta REST    |
+| Streams       | Pekko Streams 1.1 (bot-service), fs2 + cats-effect (chess-api) |
 | Analytics     | Apache Spark 3.5, Structured Streaming, Kafka |
-| Persistenz    | Slick 3.5 (FRM) / Panache+Hibernate (JPA) |
-| Bot-KI        | Greedy-Random-Algorithmus, ELO-gesteuert |
+| Persistenz    | Slick 3.5 (FRM) / Panache+Hibernate (JPA), H2, PostgreSQL |
+| Bot-KI        | Minimax + Alpha-Beta-Pruning, ELO-gesteuerte Suchtiefe (1–4 Halbzüge) |
+| Messaging     | Apache Kafka 3.7 (optional, chess.move-requests / chess.bot-responses) |
+| Resilience    | MicroProfile Fault Tolerance (@Timeout, @CircuitBreaker, @Fallback) |
 | Web-Frontend  | React 18, TypeScript, Vite, Tailwind CSS |
 | Desktop-GUI   | ScalaFX 21, JavaFX 21                    |
 | Build         | Gradle 9, Node 20                        |
-| Tests         | ScalaTest, Vitest, Rest-Assured          |
+| Tests         | ScalaTest 3.2, Vitest, Rest-Assured, JUnit 5 |
 | Observability | OpenTelemetry, Jaeger, Micrometer/Prometheus |
 
 ---
@@ -308,6 +473,11 @@ Detaillierte Anleitungen: [docs/readme/persistence-demo.md](docs/readme/persiste
 | **Streams erklärt — Präsentation (Pekko + FS2)** | **[docs/readme/STREAMS_PRESENTATION.md](docs/readme/STREAMS_PRESENTATION.md)** |
 | Reactive Streams Implementation | [docs/readme/REACTIVE_STREAMS_IMPLEMENTATION.md](docs/readme/REACTIVE_STREAMS_IMPLEMENTATION.md) |
 | **Spark Analytics — Batch & Streaming** | **[docs/readme/spark-analytics.md](docs/readme/spark-analytics.md)** |
+| Kafka — asynchrone Bot-Kommunikation | [docs/kafka.md](docs/kafka.md) |
+| Bot-Service | [docs/readme/bot-service.md](docs/readme/bot-service.md) |
+| Tournament-Service | [docs/readme/tournament-service.md](docs/readme/tournament-service.md) |
+| Kubernetes (k3s) auf dem Uni-Server | [docs/readme/kubernetes.md](docs/readme/kubernetes.md) |
+| Deployment-Guide (Uni-Server) | [docs/readme/deployment-uni-server.md](docs/readme/deployment-uni-server.md) |
 | Architektur-Entscheidungen (ADRs) | [docs/adr/](docs/adr/) |
 | Offene Probleme | [docs/unresolved.md](docs/unresolved.md) |
 
@@ -321,6 +491,7 @@ Detaillierte Anleitungen: [docs/readme/persistence-demo.md](docs/readme/persiste
 | `feature/microservice-approach-a` | Microservice-Aufteilung (game-service + bot-service) |
 | `feature/web-ui-approach-a` | Moderne Web-UI (React/TypeScript) |
 | `feature/bot-implementation` | Bot-Implementierung |
+| `feature/bot-training` | Tournament-Connector (externer Turnierserver) |
 | `feature/persistence-approach-a` | Persistenz mit **Slick (FRM)** + H2/PostgreSQL |
 | `feature/persistence-panache-approach` | Persistenz mit **Panache/Hibernate (JPA)** + H2/PostgreSQL |
 | `feature/spark` | Spark Analytics — Batch (CSV) & Kafka Structured Streaming |

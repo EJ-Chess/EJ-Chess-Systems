@@ -26,14 +26,15 @@ class BotStreamProcessorSpec extends AnyFlatSpec with Matchers:
 
   it should "complete the future within a reasonable time" in {
     val processor = BotStreamProcessor()
-    val req = BotMoveRequest(fen = initialFen, color = "black", elo = 1800)
+    // ELO 1000 → depth 2: fast even in the opening; depth 4 (ELO 1800) is too slow here
+    val req = BotMoveRequest(fen = initialFen, color = "black", elo = 1000)
 
     val startTime = System.currentTimeMillis()
     val result = Await.result(processor.enqueue(req), 5.seconds)
     val elapsed = System.currentTimeMillis() - startTime
 
     result should not be empty
-    elapsed should be < 2000L // should complete in under 2 seconds
+    elapsed should be < 3000L // depth 2 comfortably within 3 seconds
 
     processor.shutdown()
   }

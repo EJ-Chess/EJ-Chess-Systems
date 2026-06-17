@@ -110,6 +110,30 @@ services:
       retries: 5
       start_period: 50s
 
+  # ── Tournament Connector (Port 8088) ───────────────────────────────────────
+  # Verbindet unseren Bot mit dem externen Turnierserver (maichess).
+  # Bot-service muss laufen. Kein VPN nötig — beide Server sind im HTWG-Netz.
+  # Turnier-ID setzen: CONNECTOR_TOURNAMENT_ID=<id>
+  # Leer lassen = erstes verfügbares Turnier automatisch beitreten.
+  tournament-connector:
+    build:
+      context: modules/tournament-connector
+    image: eja-chess/tournament-connector:latest
+    ports:
+      - "8088:8088"
+    environment:
+      CONNECTOR_TOURNAMENT_SERVER_URL: http://141.37.74.152:8086
+      CONNECTOR_BOT_NAME: EJaChessBot
+      CONNECTOR_BOT_ELO: "1400"
+      CONNECTOR_BOT_SERVICE_URL: http://bot-service:8081
+      CONNECTOR_TOURNAMENT_ID: ""
+      CONNECTOR_POLL_INTERVAL_SECONDS: "30"
+      CONNECTOR_ENABLED: "true"
+    depends_on:
+      bot-service:
+        condition: service_healthy
+    restart: unless-stopped
+
   # ── Web-UI (Port 5173 → nginx:80) ───────────────────────────────────────────
   chess-ui:
     build:
