@@ -1,4 +1,5 @@
 const BASE_URL = '/games'
+const ANALYTICS_URL = '/analytics'
 
 // ─── Response Types ───────────────────────────────────────────────────────────
 
@@ -60,6 +61,37 @@ export interface ImportResponse {
   moveCount?: number
   error?: string
 }
+
+// ─── Analytics Types ──────────────────────────────────────────────────────────
+
+export type AnalyticsStatus = 'IDLE' | 'RUNNING' | 'DONE' | 'ERROR'
+
+export interface PlayerVictory {
+  player: string
+  victories: number
+}
+
+export interface ColorWin {
+  color: string
+  totalWins: number
+}
+
+export interface PlayerElo {
+  player: string
+  avgEloBeat: number
+}
+
+export interface AnalyticsResult {
+  status: AnalyticsStatus
+  runAt: string | null
+  victoriesPerPlayer: PlayerVictory[]
+  winsPerColor: ColorWin[]
+  avgEloBeatPerPlayer: PlayerElo[]
+  bestPlayer: string
+  dataSource: 'local' | 'lichess' | ''
+}
+
+export type AnalyticsSource = 'local' | 'lichess'
 
 // ─── Error handling ───────────────────────────────────────────────────────────
 
@@ -168,5 +200,28 @@ export const chessApi = {
       headers: jsonHeaders,
       body: json(data),
     }).then(handleResponse<ImportResponse>)
+  },
+}
+
+// ─── Analytics API ────────────────────────────────────────────────────────────
+
+export const analyticsApi = {
+  run(source: AnalyticsSource = 'local'): Promise<void> {
+    return fetch(`${ANALYTICS_URL}/run?source=${source}`, {
+      method: 'POST',
+      headers: jsonHeaders,
+    }).then(handleResponse<void>)
+  },
+
+  getStatus(): Promise<{ status: AnalyticsStatus }> {
+    return fetch(`${ANALYTICS_URL}/status`).then(
+      handleResponse<{ status: AnalyticsStatus }>,
+    )
+  },
+
+  getResults(): Promise<AnalyticsResult> {
+    return fetch(`${ANALYTICS_URL}/results`).then(
+      handleResponse<AnalyticsResult>,
+    )
   },
 }

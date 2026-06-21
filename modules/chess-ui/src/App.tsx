@@ -11,6 +11,7 @@ import { ChessClock } from './components/ChessClock'
 import { LogModal } from './components/LogModal'
 import { ClockSettingsModal } from './components/ClockSettingsModal'
 import { GameSetupModal } from './components/GameSetupModal'
+import { AnalyticsModal } from './components/AnalyticsModal'
 import {
   chessApi,
   ApiError,
@@ -411,6 +412,7 @@ export default function App() {
               onImportFen={handleImportFen}
               onImportPgn={handleImportPgn}
             />
+            <AnalyticsModal />
           </div>
         </div>
       </header>

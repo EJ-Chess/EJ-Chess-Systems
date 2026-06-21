@@ -1,7 +1,7 @@
 package de.eljachess.chess.api.service
 
 import de.eljachess.chess.api.client.BotClient
-import de.eljachess.chess.api.dto.{CreateGameRequest, GameStateResponse, MoveNotation}
+import de.eljachess.chess.api.dto.{AnalyticsGameRow, CreateGameRequest, GameStateResponse, MoveNotation}
 import de.eljachess.chess.api.kafka.BotMoveKafkaProducer
 import de.eljachess.chess.api.persistence.{GameRepository, GameRow}
 import de.eljachess.chess.controller.{GameController, GameManager, SanDecoder}
@@ -30,12 +30,13 @@ class GameService:
   private val kafkaEnabled = sys.env.getOrElse("KAFKA_ENABLED", "true") == "true"
 
   private val games:      TrieMap[String, GameManager] = TrieMap.empty
-  private val botConfigs: TrieMap[String, BotConfig]       = TrieMap.empty
+  private val botConfigs: TrieMap[String, BotConfig]   = TrieMap.empty
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
   def createGame(request: CreateGameRequest = CreateGameRequest()): String =
     val id          = UUID.randomUUID().toString
+    val playerName  = request.playerName.filter(_.nonEmpty).getOrElse("Anonymous")
     val playerColor = if request.playerColor.exists(_.toLowerCase == "black") then Color.Black else Color.White
     val ctrl        = GameController(Board.initial)
     val manager     = GameManager(ctrl)
@@ -50,7 +51,14 @@ class GameService:
         (Some(if botColor == Color.White then "WHITE" else "BLACK"), Some(elo))
       case _ => (None, None)
 
-    persistGame(id, manager, if playerColor == Color.White then "WHITE" else "BLACK", botColorOpt, botEloOpt)
+    persistGame(
+      id          = id,
+      manager     = manager,
+      playerColor = if playerColor == Color.White then "WHITE" else "BLACK",
+      botColor    = botColorOpt,
+      botElo      = botEloOpt,
+      playerName  = playerName
+    )
 
     id
 
@@ -71,6 +79,7 @@ class GameService:
         return Left(result)
       applyBotMoveIfNeeded(gameId, manager)
       updatePgn(gameId, manager)
+      checkAndRecordGameOver(gameId, manager)
 
   def makeMoveSan(gameId: String, san: String): Either[String, Unit] =
     for
@@ -83,6 +92,7 @@ class GameService:
         return Left(result)
       applyBotMoveIfNeeded(gameId, manager)
       updatePgn(gameId, manager)
+      checkAndRecordGameOver(gameId, manager)
 
   def importPgn(gameId: String, pgnString: String): Either[String, Unit] =
     for
@@ -176,6 +186,20 @@ class GameService:
       if repository != null then repository.delete(gameId)
     }
 
+  /** Returns all completed games (with a winner recorded) for analytics. */
+  def getAnalyticsData(): List[AnalyticsGameRow] =
+    if repository == null then return Nil
+    repository.findCompleted().map { row =>
+      AnalyticsGameRow(
+        gameId      = row.id,
+        playerName  = row.playerName,
+        playerColor = row.playerColor.toLowerCase,
+        winner      = row.winner.getOrElse("draw"),
+        botElo      = row.botElo.getOrElse(0),
+        moveCount   = row.moveCount
+      )
+    }.toList
+
   // ── Persistence helpers ────────────────────────────────────────────────────
 
   private def persistGame(
@@ -183,7 +207,8 @@ class GameService:
     manager:     GameManager,
     playerColor: String,
     botColor:    Option[String],
-    botElo:      Option[Int]
+    botElo:      Option[Int],
+    playerName:  String
   ): Unit =
     if repository == null then return
     repository.insert(GameRow(
@@ -191,12 +216,40 @@ class GameService:
       pgn         = manager.pgn("White", "Black"),
       playerColor = playerColor,
       botColor    = botColor,
-      botElo      = botElo
+      botElo      = botElo,
+      playerName  = playerName,
+      winner      = None,
+      moveCount   = 0
     ))
 
   private def updatePgn(gameId: String, manager: GameManager): Unit =
     if repository == null then return
     repository.updatePgn(gameId, manager.pgn("White", "Black"))
+
+  /**
+   * After each move: detect checkmate / stalemate and persist the result.
+   * Only writes once — if winner is already set (loaded from DB), this is a no-op
+   * in practice because the manager will still show legalMoves.isEmpty.
+   */
+  private def checkAndRecordGameOver(gameId: String, manager: GameManager): Unit =
+    if repository == null then return
+    val ctrl      = manager.state
+    val color     = ctrl.currentTurn
+    val board     = ctrl.board
+    val legalMoves = board.legalMoves(color)
+    if legalMoves.nonEmpty then return  // game still going
+
+    val inCheck   = board.isInCheck(color)
+    val winnerStr = if inCheck then
+      // checkmate: the side to move loses
+      if color == Color.White then "black" else "white"
+    else "draw"   // stalemate
+
+    // total plies = (fullmoveNumber - 1) * 2 + (1 if it's Black's turn, else 0)
+    val totalPlies =
+      (ctrl.fullmoveNumber - 1) * 2 + (if color == Color.Black then 1 else 0)
+
+    repository.updateWinner(gameId, winnerStr, totalPlies)
 
   private def findGame(gameId: String): Either[String, GameManager] =
     games.get(gameId) match
@@ -262,6 +315,7 @@ class GameService:
       val promoSuffix = botPromotionSuffix(manager, from, to)
       manager.move(s"$from $to$promoSuffix")
       updatePgn(gameId, manager)
+      checkAndRecordGameOver(gameId, manager)
     }
 
   // ── Private helpers ────────────────────────────────────────────────────────

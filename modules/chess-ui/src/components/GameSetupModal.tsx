@@ -30,12 +30,14 @@ export function GameSetupModal({ open, onStart, onCancel }: GameSetupModalProps)
   const [opponent, setOpponent] = useState<'human' | 'bot'>('human')
   const [playerColor, setPlayerColor] = useState<'white' | 'black'>('white')
   const [botElo, setBotElo] = useState(1400)
+  const [playerName, setPlayerName] = useState('')
 
   function handleStart() {
+    const name = playerName.trim() || undefined
     if (opponent === 'bot') {
-      onStart({ opponent: 'bot', playerColor, botElo })
+      onStart({ playerName: name, opponent: 'bot', playerColor, botElo })
     } else {
-      onStart({ opponent: 'human' })
+      onStart({ playerName: name, opponent: 'human' })
     }
   }
 
@@ -48,6 +50,22 @@ export function GameSetupModal({ open, onStart, onCancel }: GameSetupModalProps)
             Wähle deinen Gegner und die Spieleinstellungen.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Player name */}
+        <div>
+          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2 font-semibold">
+            Dein Name <span className="text-zinc-600 font-normal normal-case">(optional)</span>
+          </p>
+          <input
+            type="text"
+            placeholder="Anonymous"
+            maxLength={40}
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+            data-testid="input-player-name"
+            className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+        </div>
 
         {/* Opponent selection */}
         <div>

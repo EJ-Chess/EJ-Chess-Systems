@@ -134,6 +134,38 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ── Analytics-Service (Port 8082) — Spark-based chess game analytics ─────────
+  analytics-service:
+    build:
+      context: modules/analytics-service
+    image: eja-chess/analytics-service:latest
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./lichess.pgn:/data/lichess.pgn:ro
+    environment:
+      GAME_SERVICE_URL: http://game-service:8080
+      LICHESS_PGN_PATH: /data/lichess.pgn
+      JAVA_OPTS: >-
+        --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+        --add-opens=java.base/java.lang=ALL-UNNAMED
+        --add-opens=java.base/java.lang.invoke=ALL-UNNAMED
+        --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+        --add-opens=java.base/java.io=ALL-UNNAMED
+        --add-opens=java.base/java.net=ALL-UNNAMED
+        --add-opens=java.base/java.nio=ALL-UNNAMED
+        --add-opens=java.base/java.util=ALL-UNNAMED
+        --add-opens=java.base/java.util.concurrent=ALL-UNNAMED
+        --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED
+        --add-opens=java.base/sun.util.calendar=ALL-UNNAMED
+        -Dhadoop.home.dir=/tmp
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/q/health/ready || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
   # ── Web-UI (Port 5173 → nginx:80) ───────────────────────────────────────────
   chess-ui:
     build:
@@ -143,6 +175,8 @@ services:
       - "5173:80"
     depends_on:
       game-service:
+        condition: service_healthy
+      analytics-service:
         condition: service_healthy
 
 volumes:

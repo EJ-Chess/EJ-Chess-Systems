@@ -90,3 +90,13 @@ case class BulkGameResult(
   failed: Int,
   durationMs: Long
 )
+
+// Analytics Export — one row per completed game
+case class AnalyticsGameRow(
+  gameId:      String,
+  playerName:  String,
+  playerColor: String, // "white" or "black"
+  winner:      String, // "white", "black", or "draw"
+  botElo:      Int,    // 0 for human vs human
+  moveCount:   Int
+)

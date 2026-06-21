@@ -35,3 +35,9 @@ class GameRepository:
 
   def findAll(): Seq[GameRow] =
     Await.result(dbConfig.db.run(dbConfig.tables.findAllAction()), timeout)
+
+  def updateWinner(id: String, winner: String, moveCount: Int): Unit =
+    Await.result(dbConfig.db.run(dbConfig.tables.updateWinnerAction(id, winner, moveCount)), timeout)
+
+  def findCompleted(): Seq[GameRow] =
+    Await.result(dbConfig.db.run(dbConfig.tables.findCompletedAction()), timeout)

@@ -46,7 +46,7 @@ class GameRepositorySpec extends AnyFlatSpec with Matchers with BeforeAndAfterEa
 
   "GameRepository" should "insert and find a game by id" in {
     val repo = makeRepo()
-    val row  = GameRow("abc-1", "", "WHITE", None, None)
+    val row  = GameRow("abc-1", "", "WHITE", None, None, "Anonymous", None, 0)
     repo.insert(row)
     repo.findById("abc-1") shouldBe Some(row)
   }
@@ -57,21 +57,21 @@ class GameRepositorySpec extends AnyFlatSpec with Matchers with BeforeAndAfterEa
 
   it should "update pgn correctly" in {
     val repo = makeRepo()
-    repo.insert(GameRow("abc-2", "", "WHITE", None, None))
+    repo.insert(GameRow("abc-2", "", "WHITE", None, None, "Anonymous", None, 0))
     repo.updatePgn("abc-2", "[White \"a\"]\n\n1. e4 *")
     repo.findById("abc-2").map(_.pgn) shouldBe Some("[White \"a\"]\n\n1. e4 *")
   }
 
   it should "delete a game" in {
     val repo = makeRepo()
-    repo.insert(GameRow("abc-3", "", "WHITE", None, None))
+    repo.insert(GameRow("abc-3", "", "WHITE", None, None, "Anonymous", None, 0))
     repo.delete("abc-3")
     repo.findById("abc-3") shouldBe None
   }
 
   it should "store bot config fields" in {
     val repo = makeRepo()
-    val row  = GameRow("abc-4", "", "WHITE", Some("BLACK"), Some(1600))
+    val row  = GameRow("abc-4", "", "WHITE", Some("BLACK"), Some(1600), "Alice", None, 0)
     repo.insert(row)
     val found = repo.findById("abc-4")
     found.map(_.botColor) shouldBe Some(Some("BLACK"))
@@ -80,7 +80,31 @@ class GameRepositorySpec extends AnyFlatSpec with Matchers with BeforeAndAfterEa
 
   it should "findAll returns all inserted games" in {
     val repo = makeRepo()
-    repo.insert(GameRow("abc-5", "", "WHITE", None, None))
-    repo.insert(GameRow("abc-6", "", "BLACK", Some("WHITE"), Some(1400)))
+    repo.insert(GameRow("abc-5", "", "WHITE", None, None, "Anonymous", None, 0))
+    repo.insert(GameRow("abc-6", "", "BLACK", Some("WHITE"), Some(1400), "Bob", None, 0))
     repo.findAll().map(_.id).toSet shouldBe Set("abc-5", "abc-6")
+  }
+
+  it should "store playerName and retrieve it" in {
+    val repo = makeRepo()
+    repo.insert(GameRow("abc-7", "", "WHITE", Some("BLACK"), Some(1400), "Alice", None, 0))
+    repo.findById("abc-7").map(_.playerName) shouldBe Some("Alice")
+  }
+
+  it should "update winner and moveCount on game end" in {
+    val repo = makeRepo()
+    repo.insert(GameRow("abc-8", "", "WHITE", Some("BLACK"), Some(1400), "Charlie", None, 0))
+    repo.updateWinner("abc-8", "white", 32)
+    val found = repo.findById("abc-8")
+    found.map(_.winner)    shouldBe Some(Some("white"))
+    found.map(_.moveCount) shouldBe Some(32)
+  }
+
+  it should "findCompleted returns only games with a winner" in {
+    val repo = makeRepo()
+    repo.insert(GameRow("abc-9",  "", "WHITE", None, None, "Diana", None,        0))
+    repo.insert(GameRow("abc-10", "", "WHITE", None, None, "Eve",   Some("black"), 24))
+    val completed = repo.findCompleted().map(_.id).toSet
+    completed should contain("abc-10")
+    completed should not contain "abc-9"
   }

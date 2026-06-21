@@ -219,6 +219,12 @@ Die Lichess Open Database ([database.lichess.org](https://database.lichess.org))
 
 ### PGN-Format (Lichess)
 
+https://database.lichess.org/
+
+```plantuml
+./gradlew :modules:spark-analytics:runLichess --args="C:\Users\brand\Downloads\lichess.pgn"                                                      
+```
+
 ```pgn
 [Event "Rated Blitz game"]
 [Site "https://lichess.org/PpwPOZMq"]

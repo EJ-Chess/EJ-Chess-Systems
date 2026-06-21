@@ -48,6 +48,11 @@ class GameController:
           .entity(ErrorResponse(error, gameId = Some(gameId)))
           .build()
 
+  @GET
+  @Path("analytics-export")
+  def analyticsExport(): Response =
+    Response.ok(service.getAnalyticsData()).build()
+
   @POST
   @Path("{id}/import")
   def importGame(@PathParam("id") gameId: String, req: ImportRequest): Response =
